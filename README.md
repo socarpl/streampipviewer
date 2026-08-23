@@ -15,6 +15,24 @@ The application is intended for a monitoring screen where two CCTV feeds should 
 - Feeds can be swapped at runtime.
 - PIP position, size, and border color are configurable.
 
+## Host Architecture
+
+The application has two executable projects:
+
+- `CctvPip.App` is the shell application. It owns the main window, PIP layout, context menu, fullscreen behavior, settings dialog, config file, and MainWindow/PIP role mapping.
+- `CctvPip.StreamHost` is a single-stream player. One process is launched for `CCTV1`, and a second process is launched for `CCTV2`.
+
+The main app starts each host with `--hosted`, finds the host window by process ID, embeds that window into the matching video surface, and sends mute, unmute, restart, and shutdown commands to that process.
+
+This design exists because some native playback backends can share audio behavior inside one process. Isolating each stream into its own process makes `Mute Main Stream`, `Mute PIP Stream`, `Mute All`, and `Unmute All` behave independently.
+
+Hosted startup is equivalent to:
+
+```powershell
+CctvPip.StreamHost.exe --hosted --stream cctv1 --label CCTV1 --config "path\to\cctv-pip.properties"
+CctvPip.StreamHost.exe --hosted --stream cctv2 --label CCTV2 --config "path\to\cctv-pip.properties"
+```
+
 ## Default Streams
 
 Stream URLs example:
@@ -150,3 +168,42 @@ bin\Debug\net8.0-windows\StreamHost\CctvPip.StreamHost.exe
 ```
 
 The helper can also be launched directly for diagnostics.
+
+## Run Stream Hosts Directly
+
+Build the app first:
+
+```powershell
+dotnet build
+```
+
+Then run a stream host as a normal standalone window by omitting `--hosted`:
+
+```powershell
+.\bin\Debug\net8.0-windows\StreamHost\CctvPip.StreamHost.exe --stream cctv1 --config ".\bin\Debug\net8.0-windows\cctv-pip.properties"
+.\bin\Debug\net8.0-windows\StreamHost\CctvPip.StreamHost.exe --stream cctv2 --config ".\bin\Debug\net8.0-windows\cctv-pip.properties"
+```
+
+You can also provide a stream URL directly:
+
+```powershell
+.\bin\Debug\net8.0-windows\StreamHost\CctvPip.StreamHost.exe --label "Test Camera" --url "rtsp://camera.example/stream"
+```
+
+Useful host arguments:
+
+- `--stream cctv1` or `--stream cctv2` selects which config keys to read.
+- `--config <path>` reads stream URL, LibVLC options, and media options from a properties file.
+- `--url <rtsp-url>` overrides the configured stream URL.
+- `--label <text>` changes the window/status label.
+- `--unmuted` starts the host with audio enabled. Without this flag, hosts start muted.
+- `--libvlc-options <comma-separated-options>` overrides `libvlc.options`.
+- `--media-options <comma-separated-options>` overrides the selected stream's media options.
+
+Standalone host controls:
+
+- Right-click opens the host context menu.
+- `Mute` / `Unmute` toggles that one host process.
+- `Restart` reloads that stream.
+- Press `M` to toggle mute.
+- Press `R` to restart playback.

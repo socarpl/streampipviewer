@@ -31,6 +31,50 @@ Prefer:
 - Efficient compositor/video overlay pipeline.
 - Separate playback worker processes if the chosen backend applies audio state process-wide or otherwise cannot isolate audio per player instance.
 
+## Required Architecture
+
+Use a shell app plus a single-stream host process when implementing with LibVLC, VLC, or any playback backend that may share audio state inside one process.
+
+Recommended Windows implementation:
+
+- Main executable: `CctvPip.App`.
+- Host executable: `CctvPip.StreamHost`.
+- `CctvPip.App` owns layout, MainWindow/PIP role mapping, context menu, fullscreen, settings, and config persistence.
+- `CctvPip.StreamHost` owns exactly one native player instance and plays exactly one stream.
+- Launch one host process for `CCTV1` and one host process for `CCTV2`.
+- Build the main app so it also builds/copies the host executable and all native playback dependencies into a `StreamHost` subfolder beside the main output.
+
+In hosted mode, the main app should launch hosts similarly to:
+
+```text
+CctvPip.StreamHost.exe --hosted --stream cctv1 --label CCTV1 --config <config-path>
+CctvPip.StreamHost.exe --hosted --stream cctv2 --label CCTV2 --config <config-path>
+```
+
+Hosted process behavior:
+
+- `--hosted` makes the host borderless and suitable for embedding.
+- The host should create a real top-level window before or during playback startup.
+- The shell app should find the child window by process ID, not only by a framework-provided main-window property that may stay empty for hidden, borderless, or off-screen windows.
+- The shell app should embed the host window into the appropriate video surface using the platform's native child-window mechanism.
+- The shell app should resize embedded host windows when the main layout changes.
+- The shell app should send mute, unmute, restart, and shutdown commands to the correct child process.
+- The shell app should preserve per-stream mute state and reapply it after host restarts.
+- Closing the main app should close both host processes cleanly, then terminate them if they do not exit.
+
+The host executable must also work as a normal standalone diagnostic app when `--hosted` is omitted.
+
+Standalone host behavior:
+
+- Opens as a normal visible window.
+- Reads `--stream cctv1` or `--stream cctv2` and `--config <path>`.
+- Allows `--url <rtsp-url>` to override config.
+- Allows `--label <text>` to customize the title/status label.
+- Starts muted by default.
+- Starts unmuted only when `--unmuted` is present.
+- Supports right-click menu actions for mute/unmute and restart.
+- Supports keyboard shortcuts: `M` toggles mute and `R` restarts playback.
+
 ## Default Sources
 
 Use these default source URLs:
