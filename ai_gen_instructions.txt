@@ -1,0 +1,257 @@
+# AI Generation Instructions: Stream PIP Viewer
+
+Create a lightweight desktop Stream Picture-in-Picture viewer. The implementation technology is not fixed. Choose any stack that can provide efficient RTSP/H.264 playback, low CPU usage, and reliable desktop UI behavior.
+
+## Core Goal
+
+Build an app that displays two RTSP/H.264 CCTV feeds:
+
+- One feed as the main video.
+- One feed as a smaller PIP overlay.
+- Default: `CCTV1` main, `CCTV2` PIP.
+
+The app must prioritize:
+
+- Low CPU usage.
+- Native or hardware-assisted H.264 decoding where available.
+- High visual quality.
+- Minimal unnecessary frame copying.
+
+Avoid:
+
+- MJPEG conversion for display.
+- Re-encoding H.264 just to show the stream.
+- Raw frame pipelines where the app manually receives and paints full-resolution frames.
+
+Prefer:
+
+- Native player/decoder backend.
+- Embedded video surfaces.
+- Efficient compositor/video overlay pipeline.
+
+## Default Sources
+
+Use these default source URLs:
+
+```properties
+cctv1.url=rtsp://192.168.0.999:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
+cctv2.url=rtsp://192.168.0.998:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
+```
+
+Use `subtype=0` by default because it is the higher-quality stream.
+
+## Video Layout
+
+Implement:
+
+- Main video surface.
+- PIP video overlay.
+- Black background for letterboxing/pillarboxing.
+- Aspect-ratio preservation.
+- PIP border.
+- Default PIP border color: white.
+- PIP X/Y coordinates relative to the top-left of the main video surface.
+- PIP size as a fraction of the main video width.
+- PIP clamping so it cannot disappear fully outside the visible video area.
+
+Suggested defaults:
+
+```properties
+pip.border.color=#FFFFFF
+pip.x=1450
+pip.y=40
+pip.scale=0.28
+```
+
+## Runtime Operations
+
+Implement these operations:
+
+- Swap feeds.
+- Enter fullscreen.
+- Exit fullscreen.
+- Open settings.
+- Open active config file.
+- Change PIP size.
+- Change PIP X position.
+- Change PIP Y position.
+- Change PIP border color.
+- Change CCTV1 source URL.
+- Change CCTV2 source URL.
+- Save settings.
+- Cancel settings.
+
+## Mouse And Keyboard Behavior
+
+Context menu on right-click over the video window:
+
+```text
+Settings
+Separator
+Swap feeds
+Fullscreen
+```
+
+Rules:
+
+- `Separator` must be a real menu separator line, not text.
+- When already fullscreen, the fullscreen item should read `Exit Fullscreen`.
+- `Settings` opens the settings dialog.
+- `Swap feeds` swaps main/PIP roles.
+- `Fullscreen` enters fullscreen.
+- `Exit Fullscreen` exits fullscreen.
+
+Mouse/keyboard actions:
+
+- Double-click inside the PIP rectangle swaps feeds.
+- Double-click elsewhere in the main video window toggles fullscreen.
+- Press `Esc` to exit fullscreen.
+
+Important implementation note:
+
+Native video surfaces may consume mouse events. Ensure right-click and double-click work over the live video itself, not only over non-video UI. Use the platform-appropriate event hook, native hit-test, overlay input layer, or input-capturing strategy.
+
+## Fullscreen
+
+Fullscreen behavior:
+
+- Hide title bar and window chrome.
+- Fill the display with the video area.
+- Preserve aspect ratio where possible.
+- Keep PIP visible.
+- Exit fullscreen with `Esc`, double-click, or context menu.
+
+## Settings Dialog
+
+Implement a non-modal settings dialog.
+
+The dialog must include:
+
+- Text field for CCTV1 source URL.
+- Text field for CCTV2 source URL.
+- PIP size control.
+- PIP X control.
+- PIP Y control.
+- PIP border color picker.
+- Swap Streams button/control.
+- Open Config button/control.
+- Save button.
+- Cancel button.
+
+Behavior:
+
+- PIP size, position, and border color may preview immediately in the main window.
+- Do not write setting changes to config until `Save`.
+- `Save` writes changes to config.
+- `Cancel` discards changes and restores the config-backed view.
+- Closing the settings dialog without saving should behave like cancel.
+- If either source URL changes on save, reload/restart the streams.
+- Empty source URLs should be rejected.
+
+## Config
+
+Create or load a visible local config file. Preferred name:
+
+```text
+cctv-pip.properties
+```
+
+Required settings:
+
+```properties
+cctv1.url=rtsp://192.168.0.999:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
+cctv2.url=rtsp://192.168.0.998:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
+pip.border.color=#FFFFFF
+pip.x=1450
+pip.y=40
+pip.scale=0.28
+reconnect.attempts=3
+reconnect.delay.ms=1500
+```
+
+If the backend supports player-specific options, keep them independently configurable per stream, for example:
+
+```properties
+player.backend=native
+player.options=
+cctv1.player.options=
+cctv2.player.options=
+```
+
+The exact key names can vary, but each stream must be independently configurable.
+
+## No-Signal States
+
+Before a stream connects, show:
+
+```text
+NO SIGNAL
+```
+
+If initial connection fails after retries, show:
+
+```text
+NO SIGNAL - Failed to connect
+```
+
+If a stream was live and later reconnect attempts fail, show:
+
+```text
+NO SIGNAL. Reconnection failed
+```
+
+Requirements:
+
+- Show no-signal independently per stream.
+- Show no-signal in the main area if the main stream fails.
+- Show no-signal inside PIP if the PIP stream fails.
+- Include the stream label, such as `CCTV1` or `CCTV2`.
+- Include a short technical error reason when available.
+
+## Reconnect
+
+Implement independent reconnect logic for each stream:
+
+- Default attempts: at least `3`.
+- Default delay: `1500` ms.
+- Reconnect must not freeze the UI.
+- One failed stream must not block the other.
+- Treat initial failure and failure after live playback differently.
+- Only consider reconnect successful when actual playback resumes, not merely when a play command is issued.
+
+## Error Reporting
+
+Surface useful errors:
+
+- Player/runtime not found.
+- Unsupported option.
+- RTSP timeout.
+- Authentication failure.
+- Stream not found.
+- Decoder/player failure.
+- Player rejected media item.
+
+Do not silently hide all backend errors.
+
+## Acceptance Criteria
+
+- App launches and creates/loads config.
+- App starts with CCTV1 main and CCTV2 PIP.
+- Both default URLs use `subtype=0`.
+- Main and PIP preserve aspect ratio.
+- PIP has visible border.
+- PIP is clamped within visible video area.
+- Right-click context menu works over live video.
+- Context menu order is Settings, separator, Swap feeds, Fullscreen/Exit Fullscreen.
+- Double-click PIP swaps feeds.
+- Double-click main video toggles fullscreen.
+- `Esc` exits fullscreen.
+- Settings dialog is non-modal.
+- Settings can edit both source URLs.
+- Save commits settings to config.
+- Cancel discards settings.
+- Source URL changes reload streams after save.
+- No-signal states work independently.
+- Reconnect works independently.
+- CPU usage is materially lower than raw-frame/manual-painting approaches.
+- Video quality is close to a native RTSP/H.264 player.
