@@ -9,6 +9,11 @@ internal sealed class AppConfig : IDisposable
 
     private readonly PropertiesFile properties;
 
+    /// <summary>
+    /// Creates an application configuration wrapper around a loaded properties file, ensures missing defaults, and saves the result.
+    /// </summary>
+    /// <param name="path">The full path to the configuration file represented by this instance.</param>
+    /// <param name="properties">The parsed property entries loaded from disk or an empty property set.</param>
     private AppConfig(string path, PropertiesFile properties)
     {
         Path = path;
@@ -79,6 +84,10 @@ internal sealed class AppConfig : IDisposable
         set => Set("reconnect.delay.ms", Math.Max(250, value).ToString(CultureInfo.InvariantCulture));
     }
 
+    /// <summary>
+    /// Loads the application configuration from the executable directory, or falls back to local application data if that path cannot be written.
+    /// </summary>
+    /// <returns>A ready-to-use configuration object with default keys present.</returns>
     public static AppConfig LoadOrCreate()
     {
         var basePath = AppContext.BaseDirectory;
@@ -101,6 +110,11 @@ internal sealed class AppConfig : IDisposable
         }
     }
 
+    /// <summary>
+    /// Builds a stream definition for the requested camera, including label, URL, and parsed player options.
+    /// </summary>
+    /// <param name="id">The configured stream identifier to resolve.</param>
+    /// <returns>The stream definition used by the playback layer.</returns>
     public StreamDefinition GetStream(StreamId id)
     {
         return id == StreamId.Cctv1
@@ -108,6 +122,10 @@ internal sealed class AppConfig : IDisposable
             : new StreamDefinition("CCTV2", Cctv2Url, SplitOptions(Cctv2PlayerOptions));
     }
 
+    /// <summary>
+    /// Applies a settings snapshot to the backing properties file and persists the combined changes once.
+    /// </summary>
+    /// <param name="settings">The settings selected in the options dialog.</param>
     public void ApplySettings(AppSettings settings)
     {
         SetWithoutSave("cctv1.url", settings.Cctv1Url);
@@ -119,11 +137,18 @@ internal sealed class AppConfig : IDisposable
         Save();
     }
 
+    /// <summary>
+    /// Writes the current in-memory properties to the active configuration file path.
+    /// </summary>
     public void Save()
     {
         properties.Save(Path);
     }
 
+    /// <summary>
+    /// Opens the active configuration file in the operating system's default editor.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when the operating system cannot launch the editor for the config file.</exception>
     public void OpenInDefaultEditor()
     {
         try
@@ -140,27 +165,51 @@ internal sealed class AppConfig : IDisposable
         }
     }
 
+    /// <summary>
+    /// Persists any pending configuration values before releasing this configuration instance.
+    /// </summary>
     public void Dispose()
     {
         Save();
     }
 
+    /// <summary>
+    /// Reads a raw string property value.
+    /// </summary>
+    /// <param name="key">The property key to read.</param>
+    /// <returns>The configured value, or an empty string when the key is missing.</returns>
     private string Get(string key)
     {
         return properties.Get(key) ?? "";
     }
 
+    /// <summary>
+    /// Updates a property value and immediately saves the configuration file.
+    /// </summary>
+    /// <param name="key">The property key to update.</param>
+    /// <param name="value">The value to store for the key.</param>
     private void Set(string key, string value)
     {
         properties.Set(key, value);
         Save();
     }
 
+    /// <summary>
+    /// Updates a property value without saving, allowing a caller to batch several changes before one save.
+    /// </summary>
+    /// <param name="key">The property key to update.</param>
+    /// <param name="value">The value to store for the key.</param>
     private void SetWithoutSave(string key, string value)
     {
         properties.Set(key, value);
     }
 
+    /// <summary>
+    /// Reads an integer property using invariant-culture parsing and a fallback for missing or invalid values.
+    /// </summary>
+    /// <param name="key">The property key containing an integer value.</param>
+    /// <param name="fallback">The value to return when parsing fails.</param>
+    /// <returns>The parsed integer or the fallback value.</returns>
     private int GetInt(string key, int fallback)
     {
         return int.TryParse(Get(key), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
@@ -168,6 +217,12 @@ internal sealed class AppConfig : IDisposable
             : fallback;
     }
 
+    /// <summary>
+    /// Reads a floating-point property using invariant-culture parsing and a fallback for missing or invalid values.
+    /// </summary>
+    /// <param name="key">The property key containing a floating-point value.</param>
+    /// <param name="fallback">The value to return when parsing fails.</param>
+    /// <returns>The parsed floating-point value or the fallback value.</returns>
     private double GetDouble(string key, double fallback)
     {
         return double.TryParse(Get(key), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
@@ -175,6 +230,12 @@ internal sealed class AppConfig : IDisposable
             : fallback;
     }
 
+    /// <summary>
+    /// Converts a configured HTML color string into a WinForms color, protecting callers from invalid color text.
+    /// </summary>
+    /// <param name="value">The configured color value, usually an HTML color such as <c>#FFFFFF</c>.</param>
+    /// <param name="fallback">The color to return when the configured value is blank or invalid.</param>
+    /// <returns>The parsed color or the fallback color.</returns>
     private static Color ParseColor(string value, Color fallback)
     {
         try
@@ -187,6 +248,11 @@ internal sealed class AppConfig : IDisposable
         }
     }
 
+    /// <summary>
+    /// Splits a comma-separated player option string into individual non-empty options.
+    /// </summary>
+    /// <param name="options">The comma-separated options text from configuration.</param>
+    /// <returns>An array of trimmed option values.</returns>
     private static string[] SplitOptions(string options)
     {
         return options
@@ -195,6 +261,9 @@ internal sealed class AppConfig : IDisposable
             .ToArray();
     }
 
+    /// <summary>
+    /// Adds every required configuration key with its default value when that key is missing.
+    /// </summary>
     private void EnsureDefaults()
     {
         properties.Ensure("cctv1.url", "rtsp://192.168.0.999:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif");

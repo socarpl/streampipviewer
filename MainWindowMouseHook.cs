@@ -20,6 +20,15 @@ internal sealed class MainWindowMouseHook : IDisposable
     private Point lastLeftClickPoint = Point.Empty;
     private bool disposed;
 
+    /// <summary>
+    /// Installs a low-level mouse hook that routes right-click and double-click actions to the main viewer window.
+    /// </summary>
+    /// <param name="owner">The form that owns the context menu and receives marshalled UI actions.</param>
+    /// <param name="contextMenu">The menu shown when the user right-clicks inside the viewer area.</param>
+    /// <param name="toggleFullscreen">The action invoked when the user double-clicks outside the PIP area.</param>
+    /// <param name="swapStreams">The action invoked when the user double-clicks inside the PIP area.</param>
+    /// <param name="isPointInsidePip">A predicate that determines whether a screen point is inside the current PIP bounds.</param>
+    /// <param name="isMouseActionAllowed">A predicate that determines whether the mouse point belongs to the active viewer surface.</param>
     public MainWindowMouseHook(
         Form owner,
         ContextMenuStrip contextMenu,
@@ -38,6 +47,9 @@ internal sealed class MainWindowMouseHook : IDisposable
         hookHandle = SetWindowsHookEx(WhMouseLl, callback, IntPtr.Zero, 0);
     }
 
+    /// <summary>
+    /// Removes the low-level mouse hook if it is currently installed.
+    /// </summary>
     public void Dispose()
     {
         if (disposed)
@@ -53,6 +65,13 @@ internal sealed class MainWindowMouseHook : IDisposable
         }
     }
 
+    /// <summary>
+    /// Receives low-level mouse messages from Windows and forwards relevant button-up events to the app handler.
+    /// </summary>
+    /// <param name="nCode">The hook code provided by Windows; negative values must be passed to the next hook.</param>
+    /// <param name="wParam">The mouse message identifier.</param>
+    /// <param name="lParam">A pointer to the native low-level mouse data structure.</param>
+    /// <returns>The result from the next hook in the chain.</returns>
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
     {
         if (nCode < 0 || disposed)
@@ -71,6 +90,11 @@ internal sealed class MainWindowMouseHook : IDisposable
         return CallNextHookEx(hookHandle, nCode, wParam, lParam);
     }
 
+    /// <summary>
+    /// Handles right-click menu display and double-click actions for a screen point inside the viewer.
+    /// </summary>
+    /// <param name="message">The mouse button-up message being handled.</param>
+    /// <param name="screenPoint">The mouse position in screen coordinates.</param>
     private void HandleMouseMessage(int message, Point screenPoint)
     {
         if (!isMouseActionAllowed(screenPoint))
@@ -110,6 +134,10 @@ internal sealed class MainWindowMouseHook : IDisposable
         lastLeftClickPoint = screenPoint;
     }
 
+    /// <summary>
+    /// Marshals an action onto the owner form's UI thread when the form is still valid.
+    /// </summary>
+    /// <param name="action">The UI action to execute asynchronously on the owner form.</param>
     private void BeginOnOwner(Action action)
     {
         if (owner.IsDisposed || !owner.IsHandleCreated)
@@ -126,6 +154,11 @@ internal sealed class MainWindowMouseHook : IDisposable
         }
     }
 
+    /// <summary>
+    /// Determines whether the current left-click completes a system-timed double-click near the previous click.
+    /// </summary>
+    /// <param name="screenPoint">The latest left-click position in screen coordinates.</param>
+    /// <returns><see langword="true"/> when the click is close enough in time and distance to count as a double-click.</returns>
     private bool IsSecondLeftClick(Point screenPoint)
     {
         if (lastLeftClickAt == DateTime.MinValue)
@@ -149,6 +182,13 @@ internal sealed class MainWindowMouseHook : IDisposable
         return doubleClickBounds.Contains(screenPoint);
     }
 
+    /// <summary>
+    /// Callback signature used by the Windows low-level mouse hook API.
+    /// </summary>
+    /// <param name="nCode">The hook code supplied by Windows.</param>
+    /// <param name="wParam">The mouse message identifier.</param>
+    /// <param name="lParam">A pointer to native mouse event data.</param>
+    /// <returns>The native hook result.</returns>
     private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential)]
@@ -168,13 +208,34 @@ internal sealed class MainWindowMouseHook : IDisposable
         public readonly int Y;
     }
 
+    /// <summary>
+    /// Installs a Windows hook procedure.
+    /// </summary>
+    /// <param name="idHook">The hook type to install.</param>
+    /// <param name="lpfn">The hook callback function.</param>
+    /// <param name="hMod">The module handle containing the callback, or zero for this process.</param>
+    /// <param name="dwThreadId">The thread ID to hook, or zero for all desktop threads.</param>
+    /// <returns>The hook handle, or <see cref="IntPtr.Zero"/> on failure.</returns>
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
 
+    /// <summary>
+    /// Removes a Windows hook procedure.
+    /// </summary>
+    /// <param name="hhk">The hook handle returned by <see cref="SetWindowsHookEx"/>.</param>
+    /// <returns><see langword="true"/> when the hook is removed successfully.</returns>
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UnhookWindowsHookEx(IntPtr hhk);
 
+    /// <summary>
+    /// Passes hook data to the next hook procedure in the chain.
+    /// </summary>
+    /// <param name="hhk">The current hook handle.</param>
+    /// <param name="nCode">The hook code supplied by Windows.</param>
+    /// <param name="wParam">The mouse message identifier.</param>
+    /// <param name="lParam">A pointer to native mouse event data.</param>
+    /// <returns>The result produced by the next hook procedure.</returns>
     [DllImport("user32.dll")]
     private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
 }

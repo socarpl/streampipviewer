@@ -27,6 +27,10 @@ internal sealed class MainForm : Form
     private bool previousTopMost;
     private MainWindowMouseHook? mouseHook;
 
+    /// <summary>
+    /// Creates the main viewer window, initializes layout controls, context menu actions, mouse hooks, and hosted stream controllers.
+    /// </summary>
+    /// <param name="config">The loaded application configuration used for stream URLs and layout settings.</param>
     public MainForm(AppConfig config)
     {
         this.config = config;
@@ -64,6 +68,10 @@ internal sealed class MainForm : Form
         };
     }
 
+    /// <summary>
+    /// Releases hosted stream processes, auxiliary forms, hooks, context menus, and persisted configuration resources.
+    /// </summary>
+    /// <param name="disposing">Indicates whether managed resources should be disposed.</param>
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -80,6 +88,12 @@ internal sealed class MainForm : Form
         base.Dispose(disposing);
     }
 
+    /// <summary>
+    /// Handles application-level keyboard shortcuts before normal WinForms processing.
+    /// </summary>
+    /// <param name="msg">The current Windows message being processed.</param>
+    /// <param name="keyData">The key combination associated with the message.</param>
+    /// <returns><see langword="true"/> when the key was handled by this form; otherwise the base result.</returns>
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
         if (keyData == Keys.Escape && isFullscreen)
@@ -91,6 +105,9 @@ internal sealed class MainForm : Form
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
+    /// <summary>
+    /// Calculates the main stage, MainWindow, and PIP bounds, then resizes embedded stream hosts to match.
+    /// </summary>
     private void ApplyLayout()
     {
         var available = new Rectangle(0, 0, ClientSize.Width, ClientSize.Height);
@@ -117,6 +134,11 @@ internal sealed class MainForm : Form
         cctv2Player?.ResizeToHost();
     }
 
+    /// <summary>
+    /// Calculates PIP bounds from the current scale and coordinates while clamping them to the visible main area.
+    /// </summary>
+    /// <param name="mainSize">The current size of the main video stage.</param>
+    /// <returns>The clamped PIP rectangle relative to the stage.</returns>
     private Rectangle GetClampedPipBounds(Size mainSize)
     {
         var width = Math.Clamp((int)Math.Round(mainSize.Width * currentSettings.PipScale), 160, Math.Max(160, mainSize.Width));
@@ -142,6 +164,10 @@ internal sealed class MainForm : Form
         return new Rectangle(x, y, width, height);
     }
 
+    /// <summary>
+    /// Updates the settings dialog's maximum PIP coordinate values for the current stage and PIP size.
+    /// </summary>
+    /// <param name="pipSize">The current PIP size used to compute maximum X and Y values.</param>
     private void UpdateOptionsCoordinateLimits(Size pipSize)
     {
         optionsForm?.SetCoordinateLimits(
@@ -149,6 +175,9 @@ internal sealed class MainForm : Form
             Math.Max(0, stage.ClientSize.Height - pipSize.Height));
     }
 
+    /// <summary>
+    /// Builds the right-click context menu and wires all menu items to their viewer actions.
+    /// </summary>
     private void BuildContextMenu()
     {
         settingsMenuItem.Text = "Settings";
@@ -186,11 +215,20 @@ internal sealed class MainForm : Form
         contextMenu.Items.Add(fullscreenMenuItem);
     }
 
+    /// <summary>
+    /// Assigns the shared context menu to a WinForms control.
+    /// </summary>
+    /// <param name="control">The control that should display the shared context menu.</param>
     private void AttachContextMenu(Control control)
     {
         control.ContextMenuStrip = contextMenu;
     }
 
+    /// <summary>
+    /// Determines whether a mouse-hook action should be handled by this form at the supplied screen point.
+    /// </summary>
+    /// <param name="screenPoint">The mouse position in screen coordinates.</param>
+    /// <returns><see langword="true"/> when the point belongs to the active viewer area and no modal UI should suppress it.</returns>
     private bool IsMouseActionAllowed(Point screenPoint)
     {
         if (!Visible || IsDisposed || contextMenu.Visible)
@@ -206,22 +244,39 @@ internal sealed class MainForm : Form
         return RectangleToScreen(ClientRectangle).Contains(screenPoint);
     }
 
+    /// <summary>
+    /// Determines whether a screen point is inside the current PIP view.
+    /// </summary>
+    /// <param name="screenPoint">The mouse position in screen coordinates.</param>
+    /// <returns><see langword="true"/> when the point is inside the visible PIP rectangle.</returns>
     private bool IsPointInsidePip(Point screenPoint)
     {
         var pip = swapped ? cctv1View : cctv2View;
         return pip.Visible && pip.RectangleToScreen(pip.ClientRectangle).Contains(screenPoint);
     }
 
+    /// <summary>
+    /// Gets the hosted stream process currently displayed as the MainWindow stream.
+    /// </summary>
+    /// <returns>The current MainWindow stream controller, or <see langword="null"/> if it is not initialized.</returns>
     private HostedStreamProcess? GetMainPlayer()
     {
         return swapped ? cctv2Player : cctv1Player;
     }
 
+    /// <summary>
+    /// Gets the hosted stream process currently displayed as the PIP stream.
+    /// </summary>
+    /// <returns>The current PIP stream controller, or <see langword="null"/> if it is not initialized.</returns>
     private HostedStreamProcess? GetPipPlayer()
     {
         return swapped ? cctv1Player : cctv2Player;
     }
 
+    /// <summary>
+    /// Applies the same mute state to both stream host processes.
+    /// </summary>
+    /// <param name="muted">Set to <see langword="true"/> to mute both streams, or <see langword="false"/> to unmute both streams.</param>
     private void SetAllStreamsMuted(bool muted)
     {
         cctv1Player?.SetMuted(muted);
@@ -229,30 +284,48 @@ internal sealed class MainForm : Form
         UpdateAudioMenuItems();
     }
 
+    /// <summary>
+    /// Toggles mute for whichever stream is currently displayed in the MainWindow role.
+    /// </summary>
     private void ToggleMainStreamMuted()
     {
         GetMainPlayer()?.ToggleMuted();
         UpdateAudioMenuItems();
     }
 
+    /// <summary>
+    /// Toggles mute for whichever stream is currently displayed in the PIP role.
+    /// </summary>
     private void TogglePipStreamMuted()
     {
         GetPipPlayer()?.ToggleMuted();
         UpdateAudioMenuItems();
     }
 
+    /// <summary>
+    /// Refreshes the MainWindow and PIP mute menu labels from the current per-stream mute state.
+    /// </summary>
     private void UpdateAudioMenuItems()
     {
         UpdateToggleMuteMenuItem(toggleMainStreamMuteMenuItem, GetMainPlayer(), "Main Stream");
         UpdateToggleMuteMenuItem(togglePipStreamMuteMenuItem, GetPipPlayer(), "PIP Stream");
     }
 
+    /// <summary>
+    /// Updates one mute toggle menu item to show whether activating it will mute or unmute a stream role.
+    /// </summary>
+    /// <param name="item">The menu item to update.</param>
+    /// <param name="player">The stream controller associated with the displayed role.</param>
+    /// <param name="label">The user-facing role label shown in the menu text.</param>
     private static void UpdateToggleMuteMenuItem(ToolStripMenuItem item, HostedStreamProcess? player, string label)
     {
         item.Enabled = player is not null;
         item.Text = player?.IsMuted == true ? $"Unmute {label}" : $"Mute {label}";
     }
 
+    /// <summary>
+    /// Shows the non-modal settings dialog, creating it if needed and positioning it near the main window.
+    /// </summary>
     private void ShowOptions()
     {
         if (optionsForm is null || optionsForm.IsDisposed)
@@ -279,18 +352,29 @@ internal sealed class MainForm : Form
         optionsForm.Focus();
     }
 
+    /// <summary>
+    /// Swaps the visual MainWindow and PIP roles without changing which stream process owns each camera feed.
+    /// </summary>
     private void SwapStreams()
     {
         swapped = !swapped;
         ApplyLayout();
     }
 
+    /// <summary>
+    /// Applies temporary layout settings from the options dialog without writing them to disk.
+    /// </summary>
+    /// <param name="settings">The draft settings to preview in the main window.</param>
     private void PreviewSettings(AppSettings settings)
     {
         currentSettings = settings;
         ApplyLayout();
     }
 
+    /// <summary>
+    /// Saves settings to the config file, reapplies layout, and restarts streams when either source URL changes.
+    /// </summary>
+    /// <param name="settings">The settings confirmed by the user in the options dialog.</param>
     private void SaveSettings(AppSettings settings)
     {
         var oldSettings = AppSettings.FromConfig(config);
@@ -306,12 +390,18 @@ internal sealed class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// Discards draft settings and restores the layout from the persisted configuration.
+    /// </summary>
     private void CancelSettings()
     {
         currentSettings = AppSettings.FromConfig(config);
         ApplyLayout();
     }
 
+    /// <summary>
+    /// Switches between fullscreen and normal windowed mode.
+    /// </summary>
     private void ToggleFullscreen()
     {
         if (isFullscreen)
@@ -323,6 +413,9 @@ internal sealed class MainForm : Form
         EnterFullscreen();
     }
 
+    /// <summary>
+    /// Saves the normal window state and expands the form to fill the current screen without window chrome.
+    /// </summary>
     private void EnterFullscreen()
     {
         if (isFullscreen)
@@ -346,6 +439,9 @@ internal sealed class MainForm : Form
         ApplyLayout();
     }
 
+    /// <summary>
+    /// Restores the saved window state from before fullscreen mode.
+    /// </summary>
     private void ExitFullscreen()
     {
         if (!isFullscreen)
@@ -364,6 +460,9 @@ internal sealed class MainForm : Form
         ApplyLayout();
     }
 
+    /// <summary>
+    /// Opens the active configuration file and reports failures in a message box.
+    /// </summary>
     private void OpenConfig()
     {
         try
@@ -376,6 +475,9 @@ internal sealed class MainForm : Form
         }
     }
 
+    /// <summary>
+    /// Selects an initial client size that fits the primary working area while respecting app minimums and maximums.
+    /// </summary>
     private void SetInitialSize()
     {
         var working = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1920, 1080);
@@ -384,6 +486,12 @@ internal sealed class MainForm : Form
         ClientSize = new Size(targetWidth, targetHeight);
     }
 
+    /// <summary>
+    /// Fits a rectangle of the requested aspect ratio inside a bounding rectangle and centers it.
+    /// </summary>
+    /// <param name="bounds">The available bounding rectangle.</param>
+    /// <param name="aspectRatio">The target width divided by height.</param>
+    /// <returns>The largest centered rectangle that fits inside <paramref name="bounds"/> with the requested aspect ratio.</returns>
     private static Rectangle FitAspect(Rectangle bounds, double aspectRatio)
     {
         if (bounds.Width <= 0 || bounds.Height <= 0)

@@ -8,6 +8,11 @@ internal sealed record AppSettings(
     double PipScale,
     Color PipBorderColor)
 {
+    /// <summary>
+    /// Creates a runtime settings snapshot from the persisted application configuration.
+    /// </summary>
+    /// <param name="config">The loaded application configuration that supplies stream URLs and PIP layout values.</param>
+    /// <returns>A settings snapshot that can be edited or previewed without immediately writing changes to disk.</returns>
     public static AppSettings FromConfig(AppConfig config)
     {
         return new AppSettings(

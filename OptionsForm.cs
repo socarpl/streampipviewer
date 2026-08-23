@@ -19,6 +19,16 @@ internal sealed class OptionsForm : Form
     private bool updatingControls;
     private bool closeHandled;
 
+    /// <summary>
+    /// Creates the non-modal settings dialog and wires callback actions used by the main form.
+    /// </summary>
+    /// <param name="initialSettings">The settings snapshot used to populate the initial dialog values.</param>
+    /// <param name="config">The application configuration, used here to display the active config path.</param>
+    /// <param name="swapStreams">The action that swaps MainWindow and PIP roles from the dialog.</param>
+    /// <param name="previewSettings">The action that previews draft layout settings in the main window.</param>
+    /// <param name="saveSettings">The action that persists confirmed settings.</param>
+    /// <param name="cancelSettings">The action that restores config-backed settings when changes are cancelled.</param>
+    /// <param name="openConfig">The action that opens the active configuration file.</param>
     public OptionsForm(
         AppSettings initialSettings,
         AppConfig config,
@@ -48,6 +58,11 @@ internal sealed class OptionsForm : Form
         RefreshFromSettings(draftSettings);
     }
 
+    /// <summary>
+    /// Updates the maximum allowed PIP X and Y coordinates based on the current main-stage size.
+    /// </summary>
+    /// <param name="maxX">The maximum allowed PIP X coordinate.</param>
+    /// <param name="maxY">The maximum allowed PIP Y coordinate.</param>
     public void SetCoordinateLimits(int maxX, int maxY)
     {
         updatingControls = true;
@@ -58,6 +73,10 @@ internal sealed class OptionsForm : Form
         updatingControls = false;
     }
 
+    /// <summary>
+    /// Replaces the dialog draft settings and updates all controls without firing preview updates.
+    /// </summary>
+    /// <param name="settings">The settings snapshot that should be displayed by the dialog controls.</param>
     public void RefreshFromSettings(AppSettings settings)
     {
         draftSettings = settings;
@@ -72,6 +91,10 @@ internal sealed class OptionsForm : Form
         updatingControls = false;
     }
 
+    /// <summary>
+    /// Treats closing the dialog without an explicit save as a cancel operation.
+    /// </summary>
+    /// <param name="e">The WinForms close event arguments.</param>
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (!closeHandled)
@@ -83,6 +106,9 @@ internal sealed class OptionsForm : Form
         base.OnFormClosing(e);
     }
 
+    /// <summary>
+    /// Creates and arranges all settings controls, labels, buttons, and event handlers.
+    /// </summary>
     private void BuildControls()
     {
         var root = new TableLayoutPanel
@@ -210,12 +236,21 @@ internal sealed class OptionsForm : Form
         Controls.Add(root);
     }
 
+    /// <summary>
+    /// Applies standard layout settings to a stream URL text box.
+    /// </summary>
+    /// <param name="textBox">The text box to configure.</param>
     private static void ConfigureSourceTextBox(TextBox textBox)
     {
         textBox.Dock = DockStyle.Fill;
         textBox.Margin = new Padding(4, 4, 0, 4);
     }
 
+    /// <summary>
+    /// Creates a standard dialog button with consistent sizing and margins.
+    /// </summary>
+    /// <param name="text">The button text to display.</param>
+    /// <returns>A configured button instance.</returns>
     private static Button CreateButton(string text)
     {
         return new Button
@@ -227,6 +262,11 @@ internal sealed class OptionsForm : Form
         };
     }
 
+    /// <summary>
+    /// Creates a left-aligned caption label for source URL rows.
+    /// </summary>
+    /// <param name="text">The caption text to display.</param>
+    /// <returns>A configured label instance.</returns>
     private static Label CreateCaption(string text)
     {
         return new Label
@@ -239,6 +279,11 @@ internal sealed class OptionsForm : Form
         };
     }
 
+    /// <summary>
+    /// Creates a compact caption label for controls in the PIP settings row.
+    /// </summary>
+    /// <param name="text">The caption text to display.</param>
+    /// <returns>A configured label instance.</returns>
     private static Label CreatePipCaption(string text)
     {
         return new Label
@@ -251,6 +296,10 @@ internal sealed class OptionsForm : Form
         };
     }
 
+    /// <summary>
+    /// Applies standard range, alignment, and spacing settings to a numeric PIP coordinate input.
+    /// </summary>
+    /// <param name="input">The numeric input control to configure.</param>
     private static void ConfigureNumberInput(NumericUpDown input)
     {
         input.Minimum = 0;
@@ -261,6 +310,9 @@ internal sealed class OptionsForm : Form
         input.Margin = new Padding(0, 12, 0, 0);
     }
 
+    /// <summary>
+    /// Copies PIP coordinate input values into the draft settings and previews the layout.
+    /// </summary>
     private void UpdatePipCoordinate()
     {
         if (updatingControls)
@@ -276,6 +328,9 @@ internal sealed class OptionsForm : Form
         previewSettings(draftSettings);
     }
 
+    /// <summary>
+    /// Copies stream URL text box values into the draft settings and previews the current draft.
+    /// </summary>
     private void UpdateSourceDraft()
     {
         if (updatingControls)
@@ -291,6 +346,9 @@ internal sealed class OptionsForm : Form
         previewSettings(draftSettings);
     }
 
+    /// <summary>
+    /// Opens a color picker, stores the selected PIP border color, refreshes controls, and previews the change.
+    /// </summary>
     private void PickBorderColor()
     {
         using var dialog = new ColorDialog
@@ -309,6 +367,9 @@ internal sealed class OptionsForm : Form
         previewSettings(draftSettings);
     }
 
+    /// <summary>
+    /// Validates source URLs, passes confirmed settings to the main form, and closes the dialog.
+    /// </summary>
     private void SaveAndClose()
     {
         draftSettings = draftSettings with
@@ -328,6 +389,9 @@ internal sealed class OptionsForm : Form
         Close();
     }
 
+    /// <summary>
+    /// Cancels draft settings, restores the main form's config-backed settings, and closes the dialog.
+    /// </summary>
     private void CancelAndClose()
     {
         closeHandled = true;
@@ -335,6 +399,11 @@ internal sealed class OptionsForm : Form
         Close();
     }
 
+    /// <summary>
+    /// Chooses black or white foreground text for readable contrast against a background color.
+    /// </summary>
+    /// <param name="background">The background color to evaluate.</param>
+    /// <returns>Black text for bright backgrounds, otherwise white text.</returns>
     private static Color GetReadableTextColor(Color background)
     {
         var luminance = (0.299 * background.R + 0.587 * background.G + 0.114 * background.B) / 255;

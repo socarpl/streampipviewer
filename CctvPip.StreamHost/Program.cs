@@ -4,6 +4,10 @@ namespace CctvPip.StreamHost;
 
 internal static class Program
 {
+    /// <summary>
+    /// Parses host command-line options, initializes LibVLC, and runs a single-stream host form.
+    /// </summary>
+    /// <param name="args">Command-line arguments such as <c>--stream</c>, <c>--config</c>, <c>--hosted</c>, and <c>--unmuted</c>.</param>
     [STAThread]
     private static void Main(string[] args)
     {

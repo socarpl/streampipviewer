@@ -1,6 +1,5 @@
 using LibVLCSharp.Shared;
 using LibVLCSharp.WinForms;
-using System.Runtime.CompilerServices;
 
 namespace CctvPip.StreamHost;
 
@@ -25,6 +24,10 @@ internal sealed class StreamHostForm : Form
     private bool muted;
     private int lastActiveAudioTrack = -1;
 
+    /// <summary>
+    /// Creates a one-stream playback window that can run standalone or be embedded by the main app.
+    /// </summary>
+    /// <param name="options">The resolved stream URL, LibVLC options, media options, startup mute state, and hosting mode.</param>
     public StreamHostForm(HostOptions options)
     {
         this.options = options;
@@ -72,6 +75,12 @@ internal sealed class StreamHostForm : Form
         Shown += (_, _) => StartPlayback();
     }
 
+    /// <summary>
+    /// Handles standalone keyboard shortcuts for mute toggle and stream restart.
+    /// </summary>
+    /// <param name="msg">The current Windows message being processed.</param>
+    /// <param name="keyData">The key combination associated with the message.</param>
+    /// <returns><see langword="true"/> when the key was handled by this form; otherwise the base result.</returns>
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {
         if (keyData == Keys.M)
@@ -89,6 +98,10 @@ internal sealed class StreamHostForm : Form
         return base.ProcessCmdKey(ref msg, keyData);
     }
 
+    /// <summary>
+    /// Receives host-control window messages from the main app and dispatches them before normal message processing.
+    /// </summary>
+    /// <param name="m">The Windows message received by this form.</param>
     protected override void WndProc(ref Message m)
     {
         if (m.Msg == HostCommandMessage)
@@ -100,6 +113,10 @@ internal sealed class StreamHostForm : Form
         base.WndProc(ref m);
     }
 
+    /// <summary>
+    /// Stops playback and releases menu, media player, and LibVLC resources.
+    /// </summary>
+    /// <param name="disposing">Indicates whether managed resources should be disposed.</param>
     protected override void Dispose(bool disposing)
     {
         if (disposing)
@@ -113,6 +130,9 @@ internal sealed class StreamHostForm : Form
         base.Dispose(disposing);
     }
 
+    /// <summary>
+    /// Builds the standalone right-click menu used when the host is not embedded.
+    /// </summary>
     private void BuildMenu()
     {
         toggleMuteMenuItem.Click += (_, _) => SetMuted(!muted);
@@ -124,6 +144,9 @@ internal sealed class StreamHostForm : Form
         menu.Items.Add(restartMenuItem);
     }
 
+    /// <summary>
+    /// Creates a new LibVLC media player, attaches playback state handlers, applies mute state, and starts the stream.
+    /// </summary>
     private void StartPlayback()
     {
         ShowStatus("STARTING");
@@ -171,11 +194,18 @@ internal sealed class StreamHostForm : Form
         }
     }
 
+    /// <summary>
+    /// Restarts playback for the current stream URL and media options.
+    /// </summary>
     private void Restart()
     {
         StartPlayback();
     }
 
+    /// <summary>
+    /// Handles a command sent by the main app to mute, unmute, restart, or close this host.
+    /// </summary>
+    /// <param name="command">The command identifier received in the host-control window message.</param>
     private void HandleHostCommand(int command)
     {
         switch (command)
@@ -195,7 +225,11 @@ internal sealed class StreamHostForm : Form
         }
     }
 
-    private void SetMuted(bool muted, [CallerMemberName] string callerName = "")
+    /// <summary>
+    /// Stores and applies the desired mute state for this single-stream host process.
+    /// </summary>
+    /// <param name="muted">Set to <see langword="true"/> to disable audio, or <see langword="false"/> to restore audio.</param>
+    private void SetMuted(bool muted)
     {
         this.muted = muted;
         if (mediaPlayer is not null)
@@ -203,14 +237,16 @@ internal sealed class StreamHostForm : Form
             ApplyMuteState(mediaPlayer, muted);
         }
 
-        System.Diagnostics.Trace.WriteLine($"[{callerName}] {options.Label} muted={muted}");
         UpdateUiState();
     }
 
+    /// <summary>
+    /// Applies the requested mute state using volume and audio-track selection.
+    /// </summary>
+    /// <param name="player">The media player whose audio state should be changed.</param>
+    /// <param name="muted">Set to <see langword="true"/> to mute audio, or <see langword="false"/> to restore audio.</param>
     private void ApplyMuteState(MediaPlayer player, bool muted)
     {
-        System.Diagnostics.Trace.WriteLine($"{options.Label} ApplyMuteState={muted} player={RuntimeHelpers.GetHashCode(player)} process={Environment.ProcessId}");
-
         if (muted)
         {
             RememberActiveAudioTrack(player);
@@ -223,6 +259,10 @@ internal sealed class StreamHostForm : Form
         RestoreAudioTrack(player);
     }
 
+    /// <summary>
+    /// Records the currently active audio track so it can be restored after muting disables audio tracks.
+    /// </summary>
+    /// <param name="player">The media player whose active audio track should be remembered.</param>
     private void RememberActiveAudioTrack(MediaPlayer player)
     {
         var currentTrack = player.AudioTrack;
@@ -232,6 +272,10 @@ internal sealed class StreamHostForm : Form
         }
     }
 
+    /// <summary>
+    /// Restores the remembered audio track, or selects the first available audio track when the remembered track is unavailable.
+    /// </summary>
+    /// <param name="player">The media player whose audio track should be restored.</param>
     private void RestoreAudioTrack(MediaPlayer player)
     {
         if (lastActiveAudioTrack >= 0 && player.SetAudioTrack(lastActiveAudioTrack))
@@ -247,6 +291,11 @@ internal sealed class StreamHostForm : Form
         }
     }
 
+    /// <summary>
+    /// Finds the first playable audio track exposed by LibVLC for a media player.
+    /// </summary>
+    /// <param name="player">The media player whose audio track descriptions should be inspected.</param>
+    /// <returns>The first non-negative audio track ID, or <c>-1</c> when no audio track is available.</returns>
     private static int GetFirstAvailableAudioTrack(MediaPlayer player)
     {
         var descriptions = player.AudioTrackDescription;
@@ -266,6 +315,10 @@ internal sealed class StreamHostForm : Form
         return -1;
     }
 
+    /// <summary>
+    /// Shows an overlay status message with the stream label and process ID.
+    /// </summary>
+    /// <param name="message">The status message to display over the video surface.</param>
     private void ShowStatus(string message)
     {
         statusLabel.Text = $"{options.Label}{Environment.NewLine}{message}{Environment.NewLine}PID {Environment.ProcessId}";
@@ -274,6 +327,9 @@ internal sealed class StreamHostForm : Form
         UpdateUiState();
     }
 
+    /// <summary>
+    /// Updates the window title and standalone mute menu label from the current mute state.
+    /// </summary>
     private void UpdateUiState()
     {
         Text = $"{options.Label} - {(muted ? "Muted" : "Unmuted")} - PID {Environment.ProcessId}";

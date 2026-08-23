@@ -1,5 +1,4 @@
 using LibVLCSharp.Shared;
-using System.Runtime.CompilerServices;
 
 namespace CctvPip.App;
 
@@ -22,8 +21,13 @@ internal sealed class StreamPlayer : IDisposable
     private bool muted = true;
     private bool disposed;
 
-
-
+    /// <summary>
+    /// Creates an in-process LibVLC stream player bound to one camera view and one configured stream.
+    /// </summary>
+    /// <param name="libVlc">The LibVLC runtime instance used to create media players.</param>
+    /// <param name="view">The camera view that receives video output and status updates.</param>
+    /// <param name="streamId">The configured stream to play.</param>
+    /// <param name="configProvider">A function that returns the latest application configuration.</param>
     public StreamPlayer(LibVLC libVlc, CameraView view, StreamId streamId, Func<AppConfig> configProvider)
     {
         this.libVlc = libVlc;
@@ -32,12 +36,18 @@ internal sealed class StreamPlayer : IDisposable
         this.configProvider = configProvider;
     }
 
+    /// <summary>
+    /// Shows the initial no-signal state and starts playback for the configured stream.
+    /// </summary>
     public void Start()
     {
         view.ShowNoSignal("NO SIGNAL");
         StartPlayback();
     }
 
+    /// <summary>
+    /// Cancels reconnect work, resets playback state, and starts the stream again from the current configuration.
+    /// </summary>
     public void Restart()
     {
         reconnectCts?.Cancel();
@@ -58,6 +68,10 @@ internal sealed class StreamPlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Stores and applies the desired mute state to the current media player.
+    /// </summary>
+    /// <param name="muted">Set to <see langword="true"/> to disable audio, or <see langword="false"/> to restore audio.</param>
     public void SetMuted(bool muted)
     {
         lock (sync)
@@ -70,11 +84,14 @@ internal sealed class StreamPlayer : IDisposable
         }
     }
 
-    public bool ToggleMuted([CallerMemberName] string callerName = "")
+    /// <summary>
+    /// Flips the current mute state and applies it to the active media player.
+    /// </summary>
+    /// <returns>The new mute state after toggling.</returns>
+    public bool ToggleMuted()
     {
         lock (sync)
         {
-            System.Diagnostics.Trace.WriteLine($"[{callerName}] ToggleMuted: {muted} -> {!muted}");
             muted = !muted;
             if (mediaPlayer is not null)
             {
@@ -85,6 +102,9 @@ internal sealed class StreamPlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Cancels reconnect work, stops playback, and releases LibVLC media-player resources.
+    /// </summary>
     public void Dispose()
     {
         disposed = true;
@@ -94,6 +114,10 @@ internal sealed class StreamPlayer : IDisposable
         mediaPlayer?.Dispose();
     }
 
+    /// <summary>
+    /// Creates a new LibVLC media player, attaches event handlers, applies mute state, and starts the configured media item.
+    /// </summary>
+    /// <returns>The playback generation number assigned to this start attempt.</returns>
     private int StartPlayback()
     {
         if (disposed)
@@ -159,10 +183,13 @@ internal sealed class StreamPlayer : IDisposable
         return generation;
     }
 
+    /// <summary>
+    /// Applies the requested mute state using volume and audio-track selection.
+    /// </summary>
+    /// <param name="player">The media player whose audio state should be changed.</param>
+    /// <param name="muted">Set to <see langword="true"/> to mute audio, or <see langword="false"/> to restore audio.</param>
     private void ApplyMuteState(MediaPlayer player, bool muted)
     {
-        System.Diagnostics.Trace.WriteLine("ApplyMuteState:" + muted.ToString() + "for player " + RuntimeHelpers.GetHashCode(player));
-
         if (muted)
         {
             RememberActiveAudioTrack(player);
@@ -175,6 +202,10 @@ internal sealed class StreamPlayer : IDisposable
         RestoreAudioTrack(player);
     }
 
+    /// <summary>
+    /// Records the current active audio track so it can be restored after muting disables audio tracks.
+    /// </summary>
+    /// <param name="player">The media player whose active audio track should be remembered.</param>
     private void RememberActiveAudioTrack(MediaPlayer player)
     {
         var currentTrack = player.AudioTrack;
@@ -184,6 +215,10 @@ internal sealed class StreamPlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Restores the remembered audio track, or selects the first available audio track when the remembered track is unavailable.
+    /// </summary>
+    /// <param name="player">The media player whose audio track should be restored.</param>
     private void RestoreAudioTrack(MediaPlayer player)
     {
         if (lastActiveAudioTrack >= 0 && player.SetAudioTrack(lastActiveAudioTrack))
@@ -199,6 +234,11 @@ internal sealed class StreamPlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Finds the first playable audio track exposed by LibVLC for a media player.
+    /// </summary>
+    /// <param name="player">The media player whose audio track descriptions should be inspected.</param>
+    /// <returns>The first non-negative audio track ID, or <c>-1</c> when no audio track is available.</returns>
     private static int GetFirstAvailableAudioTrack(MediaPlayer player)
     {
         var descriptions = player.AudioTrackDescription;
@@ -218,6 +258,10 @@ internal sealed class StreamPlayer : IDisposable
         return -1;
     }
 
+    /// <summary>
+    /// Starts a fresh reconnect loop for the most recent playback failure reason.
+    /// </summary>
+    /// <param name="reason">The user-facing or technical reason that triggered reconnect handling.</param>
     private void BeginReconnect(string reason)
     {
         if (disposed)
@@ -234,6 +278,12 @@ internal sealed class StreamPlayer : IDisposable
         }
     }
 
+    /// <summary>
+    /// Attempts to reconnect the stream according to the configured retry count and delay.
+    /// </summary>
+    /// <param name="initialReason">The failure reason that started the reconnect loop.</param>
+    /// <param name="token">A cancellation token used to stop the reconnect loop when playback restarts or the player is disposed.</param>
+    /// <returns>A task that completes when reconnect succeeds, fails permanently, or is cancelled.</returns>
     private async Task ReconnectAsync(string initialReason, CancellationToken token)
     {
         var config = configProvider();
@@ -273,6 +323,10 @@ internal sealed class StreamPlayer : IDisposable
         RunOnUi(() => view.ShowNoSignal(finalMessage, latestReason));
     }
 
+    /// <summary>
+    /// Executes an action on the camera view's UI thread when needed.
+    /// </summary>
+    /// <param name="action">The UI update to run.</param>
     private void RunOnUi(Action action)
     {
         if (view.IsDisposed)

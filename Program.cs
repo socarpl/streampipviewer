@@ -4,6 +4,9 @@ namespace CctvPip.App;
 
 internal static class Program
 {
+    /// <summary>
+    /// Initializes WinForms and LibVLC, loads the application configuration, and starts the main viewer form.
+    /// </summary>
     [STAThread]
     private static void Main()
     {

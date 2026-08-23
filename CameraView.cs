@@ -7,6 +7,10 @@ internal sealed class CameraView : Panel
     private readonly VideoView videoView = new();
     private readonly Label statusLabel = new();
 
+    /// <summary>
+    /// Creates a video container with a LibVLC video surface and an overlaid status label.
+    /// </summary>
+    /// <param name="streamLabel">The label shown in no-signal and error states for this stream.</param>
     public CameraView(string streamLabel)
     {
         StreamLabel = streamLabel;
@@ -35,6 +39,10 @@ internal sealed class CameraView : Panel
 
     public VideoView VideoView => videoView;
 
+    /// <summary>
+    /// Attaches the shared application context menu to the panel, video surface, and status overlay.
+    /// </summary>
+    /// <param name="menu">The context menu to show when the user right-clicks this camera view.</param>
     public void AttachContextMenu(ContextMenuStrip menu)
     {
         ContextMenuStrip = menu;
@@ -42,6 +50,11 @@ internal sealed class CameraView : Panel
         statusLabel.ContextMenuStrip = menu;
     }
 
+    /// <summary>
+    /// Shows the status overlay with a stream label, message, and optional technical detail.
+    /// </summary>
+    /// <param name="message">The primary status message to display.</param>
+    /// <param name="detail">Optional additional detail, such as an exception message or connection reason.</param>
     public void ShowNoSignal(string message, string? detail = null)
     {
         statusLabel.Text = string.IsNullOrWhiteSpace(detail)
@@ -51,11 +64,18 @@ internal sealed class CameraView : Panel
         statusLabel.BringToFront();
     }
 
+    /// <summary>
+    /// Hides the status overlay so the live video surface is unobstructed.
+    /// </summary>
     public void ShowLive()
     {
         statusLabel.Visible = false;
     }
 
+    /// <summary>
+    /// Recalculates the status-label font size whenever the camera view is resized.
+    /// </summary>
+    /// <param name="eventargs">The resize event arguments supplied by WinForms.</param>
     protected override void OnResize(EventArgs eventargs)
     {
         base.OnResize(eventargs);
@@ -65,6 +85,11 @@ internal sealed class CameraView : Panel
             FontStyle.Bold);
     }
 
+    /// <summary>
+    /// Normalizes and truncates long status detail text so it fits inside the overlay.
+    /// </summary>
+    /// <param name="detail">The raw status detail text to display.</param>
+    /// <returns>A single-line detail string capped to the overlay's maximum display length.</returns>
     private static string TrimDetail(string detail)
     {
         detail = detail.Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal).Trim();
