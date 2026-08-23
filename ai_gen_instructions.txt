@@ -9,6 +9,7 @@ Build an app that displays two RTSP/H.264 CCTV feeds:
 - One feed as the main video.
 - One feed as a smaller PIP overlay.
 - Default: `CCTV1` main, `CCTV2` PIP.
+- Default: both streams start muted.
 
 The app must prioritize:
 
@@ -68,6 +69,10 @@ pip.scale=0.28
 Implement these operations:
 
 - Swap feeds.
+- Mute all streams.
+- Unmute all streams.
+- Toggle mute for the stream currently displayed in the main window.
+- Toggle mute for the stream currently displayed in the PIP window.
 - Enter fullscreen.
 - Exit fullscreen.
 - Open settings.
@@ -88,18 +93,36 @@ Context menu on right-click over the video window:
 ```text
 Settings
 Separator
+Mute All
+Unmute All
+Separator
+Unmute Main Stream / Mute Main Stream
+Unmute PIP Stream / Mute PIP Stream
+Separator
 Swap feeds
 Fullscreen
 ```
 
 Rules:
 
-- `Separator` must be a real menu separator line, not text.
+- Each `Separator` must be a real menu separator line, not text.
 - When already fullscreen, the fullscreen item should read `Exit Fullscreen`.
 - `Settings` opens the settings dialog.
+- `Mute All` mutes audio for both streams.
+- `Unmute All` unmutes audio for both streams.
+- `Unmute Main Stream / Mute Main Stream` toggles audio for the stream currently displayed in the main window.
+- `Unmute PIP Stream / Mute PIP Stream` toggles audio for the stream currently displayed in the PIP window.
+- Main/PIP mute toggles must follow the current layout after streams are swapped.
 - `Swap feeds` swaps main/PIP roles.
 - `Fullscreen` enters fullscreen.
 - `Exit Fullscreen` exits fullscreen.
+
+Audio behavior:
+
+- Both streams must start muted on each app launch.
+- Mute state is runtime-only unless the implementation explicitly adds persisted audio settings.
+- Mute state must be remembered per stream during reconnects and stream restarts in the current app session.
+- Muting or unmuting one displayed role must not unexpectedly change the other stream unless the user chooses `Mute All` or `Unmute All`.
 
 Mouse/keyboard actions:
 
@@ -237,12 +260,18 @@ Do not silently hide all backend errors.
 
 - App launches and creates/loads config.
 - App starts with CCTV1 main and CCTV2 PIP.
+- Both streams start muted.
 - Both default URLs use `subtype=0`.
 - Main and PIP preserve aspect ratio.
 - PIP has visible border.
 - PIP is clamped within visible video area.
 - Right-click context menu works over live video.
-- Context menu order is Settings, separator, Swap feeds, Fullscreen/Exit Fullscreen.
+- Context menu order is Settings, separator, Mute All, Unmute All, separator, Unmute/Mute Main Stream, Unmute/Mute PIP Stream, separator, Swap feeds, Fullscreen/Exit Fullscreen.
+- `Mute All` mutes both streams.
+- `Unmute All` unmutes both streams.
+- Main stream mute toggle affects whichever stream is currently displayed as the main video.
+- PIP stream mute toggle affects whichever stream is currently displayed as the PIP video.
+- Per-stream mute state survives reconnects and stream restarts during the current session.
 - Double-click PIP swaps feeds.
 - Double-click main video toggles fullscreen.
 - `Esc` exits fullscreen.

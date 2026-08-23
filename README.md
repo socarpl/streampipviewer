@@ -10,6 +10,7 @@ The application is intended for a monitoring screen where two CCTV feeds should 
 
 - `CCTV1` starts as the main full-size feed.
 - `CCTV2` starts as the smaller PIP feed.
+- Both streams start muted.
 - Feeds can be swapped at runtime.
 - PIP position, size, and border color are configurable.
 
@@ -30,10 +31,24 @@ Right-click the video window to open the context menu:
 
 ```text
 Settings
-────────
+----------
+Mute All
+Unmute All
+----------
+Unmute Main Stream / Mute Main Stream
+Unmute PIP Stream / Mute PIP Stream
+----------
 Swap feeds
 Fullscreen / Exit Fullscreen
 ```
+
+Audio controls:
+
+- `Mute All` mutes both streams.
+- `Unmute All` unmutes both streams.
+- `Unmute Main Stream / Mute Main Stream` toggles the stream currently displayed in the main video area.
+- `Unmute PIP Stream / Mute PIP Stream` toggles the stream currently displayed in the PIP overlay.
+- Mute state follows the stream through reconnects and source reloads during the current app session.
 
 Other controls:
 

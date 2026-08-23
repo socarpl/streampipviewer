@@ -4,6 +4,8 @@ namespace CctvPip.App;
 
 internal sealed class StreamPlayer : IDisposable
 {
+    private const int MutedVolume = 0;
+    private const int UnmutedVolume = 100;
     private readonly LibVLC libVlc;
     private readonly CameraView view;
     private readonly Func<AppConfig> configProvider;
@@ -15,6 +17,7 @@ internal sealed class StreamPlayer : IDisposable
     private bool hasPlayed;
     private int playbackGeneration;
     private int liveGeneration;
+    private bool muted = true;
     private bool disposed;
 
     public StreamPlayer(LibVLC libVlc, CameraView view, StreamId streamId, Func<AppConfig> configProvider)
@@ -40,6 +43,43 @@ internal sealed class StreamPlayer : IDisposable
         StartPlayback();
     }
 
+    public bool IsMuted
+    {
+        get
+        {
+            lock (sync)
+            {
+                return muted;
+            }
+        }
+    }
+
+    public void SetMuted(bool muted)
+    {
+        lock (sync)
+        {
+            this.muted = muted;
+            if (mediaPlayer is not null)
+            {
+                ApplyMuteState(mediaPlayer, muted);
+            }
+        }
+    }
+
+    public bool ToggleMuted()
+    {
+        lock (sync)
+        {
+            muted = !muted;
+            if (mediaPlayer is not null)
+            {
+                ApplyMuteState(mediaPlayer, muted);
+            }
+
+            return muted;
+        }
+    }
+
     public void Dispose()
     {
         disposed = true;
@@ -58,6 +98,7 @@ internal sealed class StreamPlayer : IDisposable
 
         var definition = configProvider().GetStream(streamId);
         int generation;
+        MediaPlayer player;
         RunOnUi(() => view.ShowNoSignal("NO SIGNAL"));
 
         lock (sync)
@@ -65,21 +106,31 @@ internal sealed class StreamPlayer : IDisposable
             generation = ++playbackGeneration;
             mediaPlayer?.Stop();
             mediaPlayer?.Dispose();
-            mediaPlayer = new MediaPlayer(libVlc)
+            player = new MediaPlayer(libVlc)
             {
                 EnableHardwareDecoding = true
             };
+            ApplyMuteState(player, muted);
 
-            mediaPlayer.Playing += (_, _) =>
+            player.Playing += (_, _) =>
             {
+                lock (sync)
+                {
+                    if (ReferenceEquals(mediaPlayer, player))
+                    {
+                        ApplyMuteState(player, muted);
+                    }
+                }
+
                 hasPlayed = true;
                 liveGeneration = generation;
                 RunOnUi(view.ShowLive);
             };
-            mediaPlayer.EncounteredError += (_, _) => BeginReconnect("Decoder/player failure");
-            mediaPlayer.EndReached += (_, _) => BeginReconnect("Stream ended");
+            player.EncounteredError += (_, _) => BeginReconnect("Decoder/player failure");
+            player.EndReached += (_, _) => BeginReconnect("Stream ended");
 
-            view.VideoView.MediaPlayer = mediaPlayer;
+            mediaPlayer = player;
+            view.VideoView.MediaPlayer = player;
         }
 
         try
@@ -90,7 +141,7 @@ internal sealed class StreamPlayer : IDisposable
                 media.AddOption(option);
             }
 
-            if (!mediaPlayer.Play(media))
+            if (!player.Play(media))
             {
                 BeginReconnect("Player rejected the RTSP media item");
             }
@@ -101,6 +152,12 @@ internal sealed class StreamPlayer : IDisposable
         }
 
         return generation;
+    }
+
+    private static void ApplyMuteState(MediaPlayer player, bool muted)
+    {
+        // LibVLCSharp exposes Mute as read-only here, so use volume as the deterministic audio gate.
+        player.Volume = muted ? MutedVolume : UnmutedVolume;
     }
 
     private void BeginReconnect(string reason)

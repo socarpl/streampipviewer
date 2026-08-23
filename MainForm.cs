@@ -12,6 +12,10 @@ internal sealed class MainForm : Form
     private readonly CameraView cctv2View = new("CCTV2");
     private readonly ContextMenuStrip contextMenu = new();
     private readonly ToolStripMenuItem settingsMenuItem = new();
+    private readonly ToolStripMenuItem muteAllMenuItem = new();
+    private readonly ToolStripMenuItem unmuteAllMenuItem = new();
+    private readonly ToolStripMenuItem toggleMainStreamMuteMenuItem = new();
+    private readonly ToolStripMenuItem togglePipStreamMuteMenuItem = new();
     private readonly ToolStripMenuItem swapFeedsMenuItem = new();
     private readonly ToolStripMenuItem fullscreenMenuItem = new();
     private AppSettings currentSettings;
@@ -153,6 +157,15 @@ internal sealed class MainForm : Form
         settingsMenuItem.Text = "Settings";
         settingsMenuItem.Click += (_, _) => ShowOptions();
 
+        muteAllMenuItem.Text = "Mute All";
+        muteAllMenuItem.Click += (_, _) => SetAllStreamsMuted(true);
+
+        unmuteAllMenuItem.Text = "Unmute All";
+        unmuteAllMenuItem.Click += (_, _) => SetAllStreamsMuted(false);
+
+        toggleMainStreamMuteMenuItem.Click += (_, _) => ToggleMainStreamMuted();
+        togglePipStreamMuteMenuItem.Click += (_, _) => TogglePipStreamMuted();
+
         swapFeedsMenuItem.Text = "Swap feeds";
         swapFeedsMenuItem.Click += (_, _) => SwapStreams();
 
@@ -161,9 +174,16 @@ internal sealed class MainForm : Form
         contextMenu.Opening += (_, _) =>
         {
             fullscreenMenuItem.Text = isFullscreen ? "Exit Fullscreen" : "Fullscreen";
+            UpdateAudioMenuItems();
         };
 
         contextMenu.Items.Add(settingsMenuItem);
+        contextMenu.Items.Add(new ToolStripSeparator());
+        contextMenu.Items.Add(muteAllMenuItem);
+        contextMenu.Items.Add(unmuteAllMenuItem);
+        contextMenu.Items.Add(new ToolStripSeparator());
+        contextMenu.Items.Add(toggleMainStreamMuteMenuItem);
+        contextMenu.Items.Add(togglePipStreamMuteMenuItem);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(swapFeedsMenuItem);
         contextMenu.Items.Add(fullscreenMenuItem);
@@ -193,6 +213,47 @@ internal sealed class MainForm : Form
     {
         var pip = swapped ? cctv1View : cctv2View;
         return pip.Visible && pip.RectangleToScreen(pip.ClientRectangle).Contains(screenPoint);
+    }
+
+    private StreamPlayer? GetMainPlayer()
+    {
+        return swapped ? cctv2Player : cctv1Player;
+    }
+
+    private StreamPlayer? GetPipPlayer()
+    {
+        return swapped ? cctv1Player : cctv2Player;
+    }
+
+    private void SetAllStreamsMuted(bool muted)
+    {
+        cctv1Player?.SetMuted(muted);
+        cctv2Player?.SetMuted(muted);
+        UpdateAudioMenuItems();
+    }
+
+    private void ToggleMainStreamMuted()
+    {
+        GetMainPlayer()?.ToggleMuted();
+        UpdateAudioMenuItems();
+    }
+
+    private void TogglePipStreamMuted()
+    {
+        GetPipPlayer()?.ToggleMuted();
+        UpdateAudioMenuItems();
+    }
+
+    private void UpdateAudioMenuItems()
+    {
+        UpdateToggleMuteMenuItem(toggleMainStreamMuteMenuItem, GetMainPlayer(), "Main Stream");
+        UpdateToggleMuteMenuItem(togglePipStreamMuteMenuItem, GetPipPlayer(), "PIP Stream");
+    }
+
+    private static void UpdateToggleMuteMenuItem(ToolStripMenuItem item, StreamPlayer? player, string label)
+    {
+        item.Enabled = player is not null;
+        item.Text = player?.IsMuted == true ? $"Unmute {label}" : $"Mute {label}";
     }
 
     private string[] GetLibVlcOptions()
