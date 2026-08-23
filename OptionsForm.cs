@@ -13,6 +13,7 @@ internal sealed class OptionsForm : Form
     private readonly TrackBar pipScaleSlider = new();
     private readonly NumericUpDown pipXInput = new();
     private readonly NumericUpDown pipYInput = new();
+    private readonly NumericUpDown borderSizeInput = new();
     private readonly Button borderColorButton = new();
     private readonly Label configPathLabel = new();
     private AppSettings draftSettings;
@@ -86,6 +87,7 @@ internal sealed class OptionsForm : Form
         pipScaleSlider.Value = Math.Clamp((int)Math.Round(draftSettings.PipScale * 100), pipScaleSlider.Minimum, pipScaleSlider.Maximum);
         pipXInput.Value = Math.Clamp(draftSettings.PipX, (int)pipXInput.Minimum, (int)pipXInput.Maximum);
         pipYInput.Value = Math.Clamp(draftSettings.PipY, (int)pipYInput.Minimum, (int)pipYInput.Maximum);
+        borderSizeInput.Value = Math.Clamp(draftSettings.PipBorderSize, (int)borderSizeInput.Minimum, (int)borderSizeInput.Maximum);
         borderColorButton.BackColor = draftSettings.PipBorderColor;
         borderColorButton.ForeColor = GetReadableTextColor(draftSettings.PipBorderColor);
         updatingControls = false;
@@ -171,8 +173,10 @@ internal sealed class OptionsForm : Form
 
         ConfigureNumberInput(pipXInput);
         ConfigureNumberInput(pipYInput);
+        ConfigureBorderSizeInput(borderSizeInput);
         pipXInput.ValueChanged += (_, _) => UpdatePipCoordinate();
         pipYInput.ValueChanged += (_, _) => UpdatePipCoordinate();
+        borderSizeInput.ValueChanged += (_, _) => UpdateBorderSize();
 
         pipRow.Controls.Add(CreatePipCaption("PIP Size"));
         pipRow.Controls.Add(pipScaleSlider);
@@ -180,6 +184,8 @@ internal sealed class OptionsForm : Form
         pipRow.Controls.Add(pipXInput);
         pipRow.Controls.Add(CreatePipCaption("PIP Y"));
         pipRow.Controls.Add(pipYInput);
+        pipRow.Controls.Add(CreatePipCaption("Border"));
+        pipRow.Controls.Add(borderSizeInput);
 
         var actionRow = new FlowLayoutPanel
         {
@@ -311,6 +317,20 @@ internal sealed class OptionsForm : Form
     }
 
     /// <summary>
+    /// Applies range, alignment, and spacing settings to the PIP border-size input.
+    /// </summary>
+    /// <param name="input">The numeric input control to configure for border size in pixels.</param>
+    private static void ConfigureBorderSizeInput(NumericUpDown input)
+    {
+        input.Minimum = 0;
+        input.Maximum = 100;
+        input.Width = 64;
+        input.Increment = 1;
+        input.TextAlign = HorizontalAlignment.Right;
+        input.Margin = new Padding(0, 12, 0, 0);
+    }
+
+    /// <summary>
     /// Copies PIP coordinate input values into the draft settings and previews the layout.
     /// </summary>
     private void UpdatePipCoordinate()
@@ -325,6 +345,20 @@ internal sealed class OptionsForm : Form
             PipX = (int)pipXInput.Value,
             PipY = (int)pipYInput.Value
         };
+        previewSettings(draftSettings);
+    }
+
+    /// <summary>
+    /// Copies the PIP border-size input value into the draft settings and previews the layout.
+    /// </summary>
+    private void UpdateBorderSize()
+    {
+        if (updatingControls)
+        {
+            return;
+        }
+
+        draftSettings = draftSettings with { PipBorderSize = (int)borderSizeInput.Value };
         previewSettings(draftSettings);
     }
 

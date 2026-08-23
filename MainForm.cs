@@ -124,9 +124,9 @@ internal sealed class MainForm : Form
 
         var pipBounds = GetClampedPipBounds(stage.ClientSize);
         pip.Bounds = pipBounds;
-        pip.BorderStyle = BorderStyle.FixedSingle;
+        pip.BorderStyle = BorderStyle.None;
         pip.BackColor = currentSettings.PipBorderColor;
-        pip.Padding = new Padding(2);
+        pip.Padding = new Padding(currentSettings.PipBorderSize);
         pip.BringToFront();
 
         UpdateOptionsCoordinateLimits(pipBounds.Size);

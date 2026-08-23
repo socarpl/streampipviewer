@@ -54,6 +54,12 @@ internal sealed class AppConfig : IDisposable
         set => Set("pip.border.color", ColorTranslator.ToHtml(value));
     }
 
+    public int PipBorderSize
+    {
+        get => Math.Clamp(GetInt("pip.border.size", 2), 0, 100);
+        set => Set("pip.border.size", Math.Clamp(value, 0, 100).ToString(CultureInfo.InvariantCulture));
+    }
+
     public int PipX
     {
         get => GetInt("pip.x", 1450);
@@ -131,6 +137,7 @@ internal sealed class AppConfig : IDisposable
         SetWithoutSave("cctv1.url", settings.Cctv1Url);
         SetWithoutSave("cctv2.url", settings.Cctv2Url);
         SetWithoutSave("pip.border.color", ColorTranslator.ToHtml(settings.PipBorderColor));
+        SetWithoutSave("pip.border.size", Math.Clamp(settings.PipBorderSize, 0, 100).ToString(CultureInfo.InvariantCulture));
         SetWithoutSave("pip.x", settings.PipX.ToString(CultureInfo.InvariantCulture));
         SetWithoutSave("pip.y", settings.PipY.ToString(CultureInfo.InvariantCulture));
         SetWithoutSave("pip.scale", settings.PipScale.ToString("0.###", CultureInfo.InvariantCulture));
@@ -269,6 +276,7 @@ internal sealed class AppConfig : IDisposable
         properties.Ensure("cctv1.url", "rtsp://192.168.0.999:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif");
         properties.Ensure("cctv2.url", "rtsp://192.168.0.998:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif");
         properties.Ensure("pip.border.color", "#FFFFFF");
+        properties.Ensure("pip.border.size", "2");
         properties.Ensure("pip.x", "1450");
         properties.Ensure("pip.y", "40");
         properties.Ensure("pip.scale", "0.28");

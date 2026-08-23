@@ -6,7 +6,8 @@ internal sealed record AppSettings(
     int PipX,
     int PipY,
     double PipScale,
-    Color PipBorderColor)
+    Color PipBorderColor,
+    int PipBorderSize)
 {
     /// <summary>
     /// Creates a runtime settings snapshot from the persisted application configuration.
@@ -21,6 +22,7 @@ internal sealed record AppSettings(
             config.PipX,
             config.PipY,
             config.PipScale,
-            config.PipBorderColor);
+            config.PipBorderColor,
+            config.PipBorderSize);
     }
 }

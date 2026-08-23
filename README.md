@@ -16,6 +16,7 @@ The application is intended for a monitoring screen where two CCTV feeds should 
 - Both streams start muted.
 - Feeds can be swapped at runtime.
 - PIP position, size, and border color are configurable.
+- PIP border size is configurable from 0 to 100 px.
 
 ## Host Architecture
 
@@ -90,12 +91,13 @@ Available settings:
 - PIP X position.
 - PIP Y position.
 - PIP border color.
+- PIP border size from 0 to 100 px.
 - Swap streams.
 - Open active config file.
 
 Settings behavior:
 
-- PIP size, position, and border color preview immediately in the main window.
+- PIP size, position, border color, and border size preview immediately in the main window.
 - Source URL and setting changes are written to config only after clicking `Save`.
 - `Cancel` restores the config-backed view and does not write changes.
 - If either source URL changes on `Save`, both streams reload.
@@ -114,6 +116,7 @@ Typical settings:
 cctv1.url=rtsp://192.168.0.999:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
 cctv2.url=rtsp://192.168.0.998:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
 pip.border.color=#FFFFFF
+pip.border.size=2
 pip.x=1450
 pip.y=40
 pip.scale=0.28

@@ -96,6 +96,7 @@ Implement:
 - Aspect-ratio preservation.
 - PIP border.
 - Default PIP border color: white.
+- Configurable PIP border size from 0 to 100 px, where 0 means no border.
 - PIP X/Y coordinates relative to the top-left of the main video surface.
 - PIP size as a fraction of the main video width.
 - PIP clamping so it cannot disappear fully outside the visible video area.
@@ -104,6 +105,7 @@ Suggested defaults:
 
 ```properties
 pip.border.color=#FFFFFF
+pip.border.size=2
 pip.x=1450
 pip.y=40
 pip.scale=0.28
@@ -202,6 +204,7 @@ The dialog must include:
 - PIP X control.
 - PIP Y control.
 - PIP border color picker.
+- PIP border size control with a 0 to 100 px range.
 - Swap Streams button/control.
 - Open Config button/control.
 - Save button.
@@ -209,7 +212,7 @@ The dialog must include:
 
 Behavior:
 
-- PIP size, position, and border color may preview immediately in the main window.
+- PIP size, position, border color, and border size may preview immediately in the main window.
 - Do not write setting changes to config until `Save`.
 - `Save` writes changes to config.
 - `Cancel` discards changes and restores the config-backed view.
@@ -231,6 +234,7 @@ Required settings:
 cctv1.url=rtsp://192.168.0.999:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
 cctv2.url=rtsp://192.168.0.998:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
 pip.border.color=#FFFFFF
+pip.border.size=2
 pip.x=1450
 pip.y=40
 pip.scale=0.28
