@@ -1,12 +1,9 @@
-using LibVLCSharp.Shared;
-
 namespace CctvPip.App;
 
 internal sealed class MainForm : Form
 {
     private const double VideoAspectRatio = 16.0 / 9.0;
     private readonly AppConfig config;
-    private readonly LibVLC libVlc;
     private readonly Panel stage = new();
     private readonly CameraView cctv1View = new("CCTV1");
     private readonly CameraView cctv2View = new("CCTV2");
@@ -19,8 +16,8 @@ internal sealed class MainForm : Form
     private readonly ToolStripMenuItem swapFeedsMenuItem = new();
     private readonly ToolStripMenuItem fullscreenMenuItem = new();
     private AppSettings currentSettings;
-    private StreamPlayer? cctv1Player;
-    private StreamPlayer? cctv2Player;
+    private HostedStreamProcess? cctv1Player;
+    private HostedStreamProcess? cctv2Player;
     private OptionsForm? optionsForm;
     private bool swapped;
     private bool isFullscreen;
@@ -34,7 +31,6 @@ internal sealed class MainForm : Form
     {
         this.config = config;
         currentSettings = AppSettings.FromConfig(config);
-        libVlc = new LibVLC(GetLibVlcOptions());
 
         Text = "Stream PIP Viewer";
         BackColor = Color.Black;
@@ -55,8 +51,8 @@ internal sealed class MainForm : Form
         cctv1View.AttachContextMenu(contextMenu);
         cctv2View.AttachContextMenu(contextMenu);
 
-        cctv1Player = new StreamPlayer(libVlc, cctv1View, StreamId.Cctv1, () => this.config);
-        cctv2Player = new StreamPlayer(libVlc, cctv2View, StreamId.Cctv2, () => this.config);
+        cctv1Player = new HostedStreamProcess(cctv1View, StreamId.Cctv1, () => this.config);
+        cctv2Player = new HostedStreamProcess(cctv2View, StreamId.Cctv2, () => this.config);
 
         ApplyLayout();
 
@@ -78,7 +74,6 @@ internal sealed class MainForm : Form
             mouseHook?.Dispose();
             mouseHook = null;
             contextMenu.Dispose();
-            libVlc.Dispose();
             config.Dispose();
         }
 
@@ -118,6 +113,8 @@ internal sealed class MainForm : Form
         pip.BringToFront();
 
         UpdateOptionsCoordinateLimits(pipBounds.Size);
+        cctv1Player?.ResizeToHost();
+        cctv2Player?.ResizeToHost();
     }
 
     private Rectangle GetClampedPipBounds(Size mainSize)
@@ -215,12 +212,12 @@ internal sealed class MainForm : Form
         return pip.Visible && pip.RectangleToScreen(pip.ClientRectangle).Contains(screenPoint);
     }
 
-    private StreamPlayer? GetMainPlayer()
+    private HostedStreamProcess? GetMainPlayer()
     {
         return swapped ? cctv2Player : cctv1Player;
     }
 
-    private StreamPlayer? GetPipPlayer()
+    private HostedStreamProcess? GetPipPlayer()
     {
         return swapped ? cctv1Player : cctv2Player;
     }
@@ -250,19 +247,10 @@ internal sealed class MainForm : Form
         UpdateToggleMuteMenuItem(togglePipStreamMuteMenuItem, GetPipPlayer(), "PIP Stream");
     }
 
-    private static void UpdateToggleMuteMenuItem(ToolStripMenuItem item, StreamPlayer? player, string label)
+    private static void UpdateToggleMuteMenuItem(ToolStripMenuItem item, HostedStreamProcess? player, string label)
     {
         item.Enabled = player is not null;
         item.Text = player?.IsMuted == true ? $"Unmute {label}" : $"Mute {label}";
-    }
-
-    private string[] GetLibVlcOptions()
-    {
-        var file = PropertiesFile.Load(config.Path);
-        var value = file.Get("libvlc.options") ?? "--no-video-title-show,--avcodec-hw=any";
-        return value
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToArray();
     }
 
     private void ShowOptions()

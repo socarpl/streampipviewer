@@ -1,4 +1,5 @@
 using LibVLCSharp.Shared;
+using System.Runtime.CompilerServices;
 
 namespace CctvPip.App;
 
@@ -17,8 +18,11 @@ internal sealed class StreamPlayer : IDisposable
     private bool hasPlayed;
     private int playbackGeneration;
     private int liveGeneration;
+    private int lastActiveAudioTrack = -1;
     private bool muted = true;
     private bool disposed;
+
+
 
     public StreamPlayer(LibVLC libVlc, CameraView view, StreamId streamId, Func<AppConfig> configProvider)
     {
@@ -66,10 +70,11 @@ internal sealed class StreamPlayer : IDisposable
         }
     }
 
-    public bool ToggleMuted()
+    public bool ToggleMuted([CallerMemberName] string callerName = "")
     {
         lock (sync)
         {
+            System.Diagnostics.Trace.WriteLine($"[{callerName}] ToggleMuted: {muted} -> {!muted}");
             muted = !muted;
             if (mediaPlayer is not null)
             {
@@ -154,10 +159,63 @@ internal sealed class StreamPlayer : IDisposable
         return generation;
     }
 
-    private static void ApplyMuteState(MediaPlayer player, bool muted)
+    private void ApplyMuteState(MediaPlayer player, bool muted)
     {
-        // LibVLCSharp exposes Mute as read-only here, so use volume as the deterministic audio gate.
-        player.Volume = muted ? MutedVolume : UnmutedVolume;
+        System.Diagnostics.Trace.WriteLine("ApplyMuteState:" + muted.ToString() + "for player " + RuntimeHelpers.GetHashCode(player));
+
+        if (muted)
+        {
+            RememberActiveAudioTrack(player);
+            player.Volume = MutedVolume;
+            player.SetAudioTrack(-1);
+            return;
+        }
+
+        player.Volume = UnmutedVolume;
+        RestoreAudioTrack(player);
+    }
+
+    private void RememberActiveAudioTrack(MediaPlayer player)
+    {
+        var currentTrack = player.AudioTrack;
+        if (currentTrack >= 0)
+        {
+            lastActiveAudioTrack = currentTrack;
+        }
+    }
+
+    private void RestoreAudioTrack(MediaPlayer player)
+    {
+        if (lastActiveAudioTrack >= 0 && player.SetAudioTrack(lastActiveAudioTrack))
+        {
+            return;
+        }
+
+        var firstAvailableTrack = GetFirstAvailableAudioTrack(player);
+        if (firstAvailableTrack >= 0)
+        {
+            lastActiveAudioTrack = firstAvailableTrack;
+            player.SetAudioTrack(firstAvailableTrack);
+        }
+    }
+
+    private static int GetFirstAvailableAudioTrack(MediaPlayer player)
+    {
+        var descriptions = player.AudioTrackDescription;
+        if (descriptions is null)
+        {
+            return -1;
+        }
+
+        foreach (var track in descriptions)
+        {
+            if (track.Id >= 0)
+            {
+                return track.Id;
+            }
+        }
+
+        return -1;
     }
 
     private void BeginReconnect(string reason)

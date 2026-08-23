@@ -3,6 +3,7 @@
 Stream PIP Viewer is a lightweight desktop application for displaying two RTSP/H.264 feeds with a main view and a picture-in-picture overlay.
 
 The app was built to prioritize low CPU usage and good image quality. It uses native video playback instead of converting camera feeds to MJPEG or pushing raw frames through the application.
+Each stream runs in its own `CctvPip.StreamHost` process, and the main app embeds those helper windows into the MainWindow and PIP surfaces. This keeps audio state isolated per stream when the native playback backend exposes process-wide audio behavior.
 
 ## Purpose
 
@@ -49,6 +50,7 @@ Audio controls:
 - `Unmute Main Stream / Mute Main Stream` toggles the stream currently displayed in the main video area.
 - `Unmute PIP Stream / Mute PIP Stream` toggles the stream currently displayed in the PIP overlay.
 - Mute state follows the stream through reconnects and source reloads during the current app session.
+- Main/PIP audio commands are sent to separate stream-host processes so muting or unmuting one stream does not change the other stream.
 
 Other controls:
 
@@ -140,3 +142,11 @@ Build:
 ```powershell
 dotnet build
 ```
+
+Building the main app also builds `CctvPip.StreamHost` and copies the helper executable to:
+
+```text
+bin\Debug\net8.0-windows\StreamHost\CctvPip.StreamHost.exe
+```
+
+The helper can also be launched directly for diagnostics.

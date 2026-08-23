@@ -29,6 +29,7 @@ Prefer:
 - Native player/decoder backend.
 - Embedded video surfaces.
 - Efficient compositor/video overlay pipeline.
+- Separate playback worker processes if the chosen backend applies audio state process-wide or otherwise cannot isolate audio per player instance.
 
 ## Default Sources
 
@@ -123,6 +124,7 @@ Audio behavior:
 - Mute state is runtime-only unless the implementation explicitly adds persisted audio settings.
 - Mute state must be remembered per stream during reconnects and stream restarts in the current app session.
 - Muting or unmuting one displayed role must not unexpectedly change the other stream unless the user chooses `Mute All` or `Unmute All`.
+- If the native playback library cannot independently mute two players inside one process, run each stream in a separate helper process and have the main app embed/control those helper windows.
 
 Mouse/keyboard actions:
 
@@ -284,3 +286,4 @@ Do not silently hide all backend errors.
 - Reconnect works independently.
 - CPU usage is materially lower than raw-frame/manual-painting approaches.
 - Video quality is close to a native RTSP/H.264 player.
+- If using an out-of-process stream host, building the main app also builds/copies the helper executable needed at runtime.
