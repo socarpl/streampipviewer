@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace CctvPip.App;
 
@@ -119,7 +120,7 @@ internal sealed class HostedStreamProcess : IDisposable
                 return;
             }
 
-            hostedWindow = WaitForMainWindow(process, TimeSpan.FromSeconds(8));
+            hostedWindow = WaitForHostWindow(process, TimeSpan.FromSeconds(8), stream.Label);
             EmbedHostedWindow();
             SendCommand(muted ? CommandMute : CommandUnmute);
             view.ShowLive();
@@ -203,7 +204,7 @@ internal sealed class HostedStreamProcess : IDisposable
         }
     }
 
-    private static IntPtr WaitForMainWindow(Process process, TimeSpan timeout)
+    private static IntPtr WaitForHostWindow(Process process, TimeSpan timeout, string expectedTitlePrefix)
     {
         var stopwatch = Stopwatch.StartNew();
         while (stopwatch.Elapsed < timeout)
@@ -214,15 +215,64 @@ internal sealed class HostedStreamProcess : IDisposable
             }
 
             process.Refresh();
-            if (process.MainWindowHandle != IntPtr.Zero)
+            if (process.MainWindowHandle != IntPtr.Zero && IsExpectedHostWindow(process.MainWindowHandle, expectedTitlePrefix))
             {
                 return process.MainWindowHandle;
+            }
+
+            var windowHandle = FindProcessWindow(process.Id, expectedTitlePrefix);
+            if (windowHandle != IntPtr.Zero)
+            {
+                return windowHandle;
             }
 
             Thread.Sleep(50);
         }
 
-        throw new TimeoutException("Timed out waiting for the stream host window.");
+        throw new TimeoutException($"Timed out waiting for the {expectedTitlePrefix} stream host window.");
+    }
+
+    private static IntPtr FindProcessWindow(int processId, string expectedTitlePrefix)
+    {
+        var foundWindow = IntPtr.Zero;
+        EnumWindows((windowHandle, _) =>
+        {
+            if (!IsWindowVisible(windowHandle))
+            {
+                return true;
+            }
+
+            GetWindowThreadProcessId(windowHandle, out var windowProcessId);
+            if (windowProcessId != processId)
+            {
+                return true;
+            }
+
+            if (!IsExpectedHostWindow(windowHandle, expectedTitlePrefix))
+            {
+                return true;
+            }
+
+            foundWindow = windowHandle;
+            return false;
+        }, IntPtr.Zero);
+
+        return foundWindow;
+    }
+
+    private static bool IsExpectedHostWindow(IntPtr windowHandle, string expectedTitlePrefix)
+    {
+        var title = GetWindowTitle(windowHandle);
+        return title.StartsWith(expectedTitlePrefix, StringComparison.Ordinal);
+    }
+
+    private static string GetWindowTitle(IntPtr windowHandle)
+    {
+        var length = Math.Max(GetWindowTextLength(windowHandle) + 1, 256);
+        var builder = new StringBuilder(length);
+        return GetWindowText(windowHandle, builder, builder.Capacity) > 0
+            ? builder.ToString()
+            : string.Empty;
     }
 
     private static string ResolveStreamHostPath()
@@ -271,4 +321,23 @@ internal sealed class HostedStreamProcess : IDisposable
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetWindowTextLength(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
 }
