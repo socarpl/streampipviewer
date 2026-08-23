@@ -24,7 +24,9 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        run: dotnet restore CctvPip.App.csproj
+        run: |
+          dotnet restore CctvPip.App.csproj
+          dotnet restore CctvPip.StreamHost\CctvPip.StreamHost.csproj
 
       - name: Build release output
         run: dotnet build CctvPip.App.csproj --configuration Release --nologo
