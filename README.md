@@ -1,9 +1,11 @@
 # Stream PIP Viewer
 
-Stream PIP Viewer is a lightweight desktop application for displaying two RTSP/H.264 feeds with a main view and a picture-in-picture overlay.
+Stream PIP Viewer is a lightweight desktop application for displaying two RTSP/H.264 feeds with a main view and a picture-in-picture overlay. Originally developed to preview CCTV streams, but can be used to present any rtsp from the web.
 
 The app was built to prioritize low CPU usage and good image quality. It uses native video playback instead of converting camera feeds to MJPEG or pushing raw frames through the application.
 Each stream runs in its own `CctvPip.StreamHost` process, and the main app embeds those helper windows into the MainWindow and PIP surfaces. This keeps audio state isolated per stream when the native playback backend exposes process-wide audio behavior.
+
+![Stream PIP Viewer showing RTSP picture-in-picture playback](assets/StreamPIPViewer.jpg)
 
 ## Purpose
 
