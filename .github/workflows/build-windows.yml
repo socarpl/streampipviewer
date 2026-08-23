@@ -1,0 +1,66 @@
+name: Build Windows ZIP
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows ZIP
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore CctvPip.App.csproj
+
+      - name: Build release output
+        run: dotnet build CctvPip.App.csproj --configuration Release --nologo
+
+      - name: Package release ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $output = Join-Path $PWD "bin\Release\net8.0-windows"
+          if (-not (Test-Path -LiteralPath $output)) {
+              throw "Release output folder was not created: $output"
+          }
+
+          $version = if ("${{ github.ref_type }}" -eq "tag") {
+              "${{ github.ref_name }}"
+          } else {
+              "manual-${{ github.run_number }}"
+          }
+
+          $zipName = "StreamPIPViewer-$version-windows.zip"
+          if (Test-Path -LiteralPath $zipName) {
+              Remove-Item -LiteralPath $zipName -Force
+          }
+
+          Compress-Archive -Path (Join-Path $output "*") -DestinationPath $zipName -CompressionLevel Optimal
+          "ZIP_PATH=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StreamPIPViewer-windows
+          path: ${{ env.ZIP_PATH }}
+          retention-days: 14
+
+      - name: Attach ZIP to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP_PATH }}
