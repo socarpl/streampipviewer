@@ -49,7 +49,12 @@ internal static class Program
         var swapCount = 0;
         var inPip = false;
         var allowed = true;
-        using var hook = new MainWindowMouseHook(owner, menu, () => fullscreenCount++,
+        Point? menuClickPoint = null;
+        using var hook = new MainWindowMouseHook(owner, p =>
+        {
+            menuClickPoint = p;
+            menu.Show(owner, owner.PointToClient(p));
+        }, () => fullscreenCount++,
             () => swapCount++, _ => inPip,
             p => allowed && !menu.Visible && owner.RectangleToScreen(owner.ClientRectangle).Contains(p));
 
@@ -69,6 +74,7 @@ internal static class Program
         Click(RightUp);
         Application.DoEvents();
         Check(menu.Visible, "Exposed viewer opens its context menu");
+        Check(menuClickPoint == point, "Context menu receives the original right-click screen point");
         menu.Close();
 
         blocker.Show();

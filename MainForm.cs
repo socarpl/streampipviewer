@@ -8,6 +8,7 @@ internal sealed class MainForm : Form
     private readonly CameraView cctv1View = new("CCTV1");
     private readonly CameraView cctv2View = new("CCTV2");
     private readonly ContextMenuStrip contextMenu = new();
+    private readonly ToolStripMenuItem reconnectMenuItem = new();
     private readonly ToolStripMenuItem settingsMenuItem = new();
     private readonly ToolStripMenuItem muteAllMenuItem = new();
     private readonly ToolStripMenuItem unmuteAllMenuItem = new();
@@ -18,6 +19,8 @@ internal sealed class MainForm : Form
     private AppSettings currentSettings;
     private HostedStreamProcess? cctv1Player;
     private HostedStreamProcess? cctv2Player;
+    private HostedStreamProcess? contextMenuPlayer;
+    private Point? contextMenuScreenPoint;
     private OptionsForm? optionsForm;
     private bool swapped;
     private bool isFullscreen;
@@ -49,7 +52,7 @@ internal sealed class MainForm : Form
 
         Controls.Add(stage);
         BuildContextMenu();
-        mouseHook = new MainWindowMouseHook(this, contextMenu, ToggleFullscreen, SwapStreams, IsPointInsidePip, IsMouseActionAllowed);
+        mouseHook = new MainWindowMouseHook(this, ShowContextMenu, ToggleFullscreen, SwapStreams, IsPointInsidePip, IsMouseActionAllowed);
         AttachContextMenu(this);
         AttachContextMenu(stage);
         cctv1View.AttachContextMenu(contextMenu);
@@ -180,6 +183,9 @@ internal sealed class MainForm : Form
     /// </summary>
     private void BuildContextMenu()
     {
+        reconnectMenuItem.Text = "Reconnect";
+        reconnectMenuItem.Click += (_, _) => contextMenuPlayer?.Restart();
+
         settingsMenuItem.Text = "Settings";
         settingsMenuItem.Click += (_, _) => ShowOptions();
 
@@ -199,10 +205,14 @@ internal sealed class MainForm : Form
 
         contextMenu.Opening += (_, _) =>
         {
+            var screenPoint = contextMenuScreenPoint ?? Cursor.Position;
+            contextMenuPlayer = IsPointInsidePip(screenPoint) ? GetPipPlayer() : GetMainPlayer();
+            reconnectMenuItem.Enabled = contextMenuPlayer is not null;
             fullscreenMenuItem.Text = isFullscreen ? "Exit Fullscreen" : "Fullscreen";
             UpdateAudioMenuItems();
         };
 
+        contextMenu.Items.Add(reconnectMenuItem);
         contextMenu.Items.Add(settingsMenuItem);
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(muteAllMenuItem);
@@ -213,6 +223,23 @@ internal sealed class MainForm : Form
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add(swapFeedsMenuItem);
         contextMenu.Items.Add(fullscreenMenuItem);
+    }
+
+    /// <summary>
+    /// Opens the menu with the original right-click point so stream selection does not follow later cursor movement.
+    /// </summary>
+    /// <param name="screenPoint">The right-click position in screen coordinates.</param>
+    private void ShowContextMenu(Point screenPoint)
+    {
+        contextMenuScreenPoint = screenPoint;
+        try
+        {
+            contextMenu.Show(this, PointToClient(screenPoint));
+        }
+        finally
+        {
+            contextMenuScreenPoint = null;
+        }
     }
 
     /// <summary>

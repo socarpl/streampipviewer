@@ -9,7 +9,7 @@ internal sealed class MainWindowMouseHook : IDisposable
     private const int WmRButtonUp = 0x0205;
 
     private readonly Form owner;
-    private readonly ContextMenuStrip contextMenu;
+    private readonly Action<Point> showContextMenu;
     private readonly Action toggleFullscreen;
     private readonly Action swapStreams;
     private readonly Func<Point, bool> isPointInsidePip;
@@ -24,21 +24,21 @@ internal sealed class MainWindowMouseHook : IDisposable
     /// Installs a low-level mouse hook that routes right-click and double-click actions to the main viewer window.
     /// </summary>
     /// <param name="owner">The form that owns the context menu and receives marshalled UI actions.</param>
-    /// <param name="contextMenu">The menu shown when the user right-clicks inside the viewer area.</param>
+    /// <param name="showContextMenu">Shows the viewer menu using the original right-click screen point.</param>
     /// <param name="toggleFullscreen">The action invoked when the user double-clicks outside the PIP area.</param>
     /// <param name="swapStreams">The action invoked when the user double-clicks inside the PIP area.</param>
     /// <param name="isPointInsidePip">A predicate that determines whether a screen point is inside the current PIP bounds.</param>
     /// <param name="isMouseActionAllowed">A predicate that determines whether the mouse point belongs to the active viewer surface.</param>
     public MainWindowMouseHook(
         Form owner,
-        ContextMenuStrip contextMenu,
+        Action<Point> showContextMenu,
         Action toggleFullscreen,
         Action swapStreams,
         Func<Point, bool> isPointInsidePip,
         Func<Point, bool> isMouseActionAllowed)
     {
         this.owner = owner;
-        this.contextMenu = contextMenu;
+        this.showContextMenu = showContextMenu;
         this.toggleFullscreen = toggleFullscreen;
         this.swapStreams = swapStreams;
         this.isPointInsidePip = isPointInsidePip;
@@ -109,7 +109,7 @@ internal sealed class MainWindowMouseHook : IDisposable
             {
                 if (CanHandleMouseAt(screenPoint))
                 {
-                    contextMenu.Show(owner, owner.PointToClient(screenPoint));
+                    showContextMenu(screenPoint);
                 }
             });
             return;

@@ -52,6 +52,7 @@ The defaults use `subtype=0`, which is the higher-quality stream for these camer
 Right-click the video window to open the context menu:
 
 ```text
+Reconnect
 Settings
 ----------
 Mute All
@@ -75,6 +76,7 @@ Audio controls:
 
 Other controls:
 
+- `Reconnect` restarts only the stream under the original right-click, in the main view or PIP. It follows feed swaps and preserves that stream's mute state.
 - Double-click the main video area to enter/exit fullscreen.
 - Double-click the PIP video to swap feeds.
 - Press `Esc` to exit fullscreen.
