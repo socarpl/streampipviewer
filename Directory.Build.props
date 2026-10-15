@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Change these three numbers for a new major, minor, or patch version. -->
+    <VersionPrefix>1.0.1</VersionPrefix>
+  </PropertyGroup>
+</Project>

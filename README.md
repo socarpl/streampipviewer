@@ -174,6 +174,30 @@ bin\Debug\net8.0-windows\StreamHost\CctvPip.StreamHost.exe
 
 The helper can also be launched directly for diagnostics.
 
+## Versions And Releases
+
+Set the three-part release version in `Directory.Build.props`, currently `1.0.1`.
+The build automatically appends the total number of Git commits, for example `1.0.1.14`.
+The main app and stream host share this version. A new commit increments the fourth
+number; rebuilding the same commit keeps it unchanged. Uncommitted edits retain the
+current commit's version. The product version also includes the Git commit hash.
+
+Build from a checkout with full Git history (`git fetch --unshallow` for a shallow clone).
+When building a source archive without Git, supply the revision explicitly:
+
+```powershell
+dotnet build -p:VersionRevision=14
+```
+
+Every push to `main` runs the Windows release workflow. A successful build creates a
+matching tag such as `v1.0.1.14` and publishes `StreamPIPViewer-v1.0.1.14-windows.zip`
+to GitHub Releases. The workflow can also be run manually on `main`; rerunning a
+published version keeps its existing download.
+
+After publication, the workflow keeps the latest release and two previous releases
+(three total), deleting older releases and their downloads. Git tags remain available
+as source history. Failed builds or uploads do not remove previous releases.
+
 ## Run Stream Hosts Directly
 
 Build the app first:

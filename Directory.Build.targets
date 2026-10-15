@@ -1,0 +1,28 @@
+<Project>
+  <Target Name="SetBuildVersion" BeforeTargets="GetAssemblyVersion">
+    <!-- Full history gives the same revision locally and on GitHub. Source archives can
+         supply -p:VersionRevision=N when no Git checkout is available. -->
+    <Exec Command="git rev-parse --is-shallow-repository"
+          WorkingDirectory="$(MSBuildThisFileDirectory)" ConsoleToMSBuild="true"
+          StandardOutputImportance="Low" Condition="'$(VersionRevision)' == ''">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_VersionHistoryIsShallow" />
+    </Exec>
+    <Error Condition="'$(_VersionHistoryIsShallow)' == 'true'"
+           Text="Versioning requires full Git history. Run git fetch --unshallow, or supply -p:VersionRevision=N." />
+    <Exec Command="git rev-list --count HEAD"
+          WorkingDirectory="$(MSBuildThisFileDirectory)" ConsoleToMSBuild="true"
+          StandardOutputImportance="Low" Condition="'$(VersionRevision)' == ''">
+      <Output TaskParameter="ConsoleOutput" PropertyName="VersionRevision" />
+    </Exec>
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(VersionRevision)', '^\d{1,5}$'))"
+           Text="VersionRevision must be a nonnegative integer below 65535." />
+    <Error Condition="$(VersionRevision) &gt; 65534"
+           Text="VersionRevision must be below 65535, the .NET assembly version limit." />
+    <PropertyGroup>
+      <Version>$(VersionPrefix).$(VersionRevision)</Version>
+      <AssemblyVersion>$(Version)</AssemblyVersion>
+      <FileVersion>$(Version)</FileVersion>
+      <InformationalVersion>$(Version)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+</Project>
