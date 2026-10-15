@@ -74,7 +74,7 @@ internal sealed class AppConfig : IDisposable
 
     /// <summary>
     /// Converts legacy pixel coordinates once, preserving their clamped position in the initial video area.
-    /// Existing percentage values take precedence; legacy keys remain available for older app versions.
+    /// Existing percentage values take precedence; obsolete pixel keys are removed after conversion.
     /// </summary>
     public void InitializePipPosition(Size initialMainSize)
     {
@@ -97,6 +97,8 @@ internal sealed class AppConfig : IDisposable
             SetWithoutSave("pip.top.percent", (y * 100.0 / initialMainSize.Height).ToString("0.###", CultureInfo.InvariantCulture));
             changed = true;
         }
+        changed |= properties.Remove("pip.x");
+        changed |= properties.Remove("pip.y");
         if (changed)
         {
             Save();

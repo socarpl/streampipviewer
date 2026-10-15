@@ -89,6 +89,18 @@ internal sealed class PropertiesFile
     }
 
     /// <summary>
+    /// Removes every occurrence of a property key while preserving comments and other entries.
+    /// </summary>
+    /// <param name="key">The property key to remove, matched without case sensitivity.</param>
+    /// <returns>Whether any property entries were removed.</returns>
+    public bool Remove(string key)
+    {
+        byKey.Remove(key);
+        return entries.RemoveAll(entry => entry.IsProperty &&
+            StringComparer.OrdinalIgnoreCase.Equals(entry.Key, key)) > 0;
+    }
+
+    /// <summary>
     /// Saves the properties file with UTF-8 encoding, preserving original comments and blank lines.
     /// </summary>
     /// <param name="path">The full path where the properties file should be written.</param>

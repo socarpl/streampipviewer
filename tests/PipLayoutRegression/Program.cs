@@ -63,6 +63,9 @@ internal static class Program
         var migrated = PipLayout.GetBounds(new Size(1920, 1080), legacy.PipScale, legacy.PipLeftPercent, legacy.PipTopPercent);
         Check(migrated.Location == new Point(1300, 40), "Legacy pixels migrate to the same initial position");
         var saved = File.ReadAllText(legacy.Path);
+        Check(!saved.Contains("pip.x=") && !saved.Contains("pip.y=") &&
+            saved.Contains("pip.left.percent=") && saved.Contains("pip.top.percent="),
+            "Migration replaces pixel keys with percentage keys");
         legacy.InitializePipPosition(new Size(3840, 2160));
         Check(saved == File.ReadAllText(legacy.Path), "Migration runs once and is not repeated on resize");
         using var reloaded = NewConfig(legacy.Path);
@@ -71,6 +74,18 @@ internal static class Program
         using var mixed = Config(directory, "mixed", "pip.left.percent=10\npip.x=1300\npip.y=54\n");
         mixed.InitializePipPosition(new Size(1920, 1080));
         Check(mixed.PipLeftPercent == 10 && mixed.PipTopPercent == 5, "Explicit percentages override legacy pixels per axis");
+        using var migratedAlready = Config(directory, "already-migrated",
+            "# Keep this comment\npip.left.percent=10.25\npip.top.percent=5.75\npip.x=100\nPIP.X=1382\npip.y=40\ncustom.setting=keep\n");
+        migratedAlready.InitializePipPosition(new Size(1920, 1080));
+        var cleaned = File.ReadAllText(migratedAlready.Path);
+        Check(!cleaned.Contains("pip.x=", StringComparison.OrdinalIgnoreCase) && !cleaned.Contains("pip.y=", StringComparison.OrdinalIgnoreCase) &&
+            migratedAlready.PipLeftPercent == 10.25 && migratedAlready.PipTopPercent == 5.75 &&
+            cleaned.Contains("# Keep this comment") && cleaned.Contains("custom.setting=keep"),
+            "Existing percentage configs lose all legacy duplicates while preserving settings and comments");
+        using var cleanedReloaded = NewConfig(migratedAlready.Path);
+        Check(cleanedReloaded.PipLeftPercent == 10.25 && cleanedReloaded.PipTopPercent == 5.75 &&
+            !File.ReadAllText(cleanedReloaded.Path).Contains("pip.x=", StringComparison.OrdinalIgnoreCase),
+            "Reload does not recreate removed pixel keys");
         using var outOfBounds = Config(directory, "old-outside", "pip.x=99999\npip.y=-30\n");
         outOfBounds.InitializePipPosition(new Size(1920, 1080));
         var bounds = PipLayout.GetBounds(new Size(1920, 1080), .28, outOfBounds.PipLeftPercent, outOfBounds.PipTopPercent);

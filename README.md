@@ -111,8 +111,9 @@ window resizing, fullscreen, and monitor changes. PIP stays fully inside the vid
 area; temporary clamping does not change your chosen percentages.
 
 Older `pip.x` / `pip.y` pixel settings are converted once using the initial video
-area size. Existing percentage settings take precedence. Legacy keys are retained
-for older app versions; this version uses `pip.left.percent` / `pip.top.percent`.
+area size. Existing percentage settings take precedence. After conversion, the old
+pixel keys are removed. Configurations that already have percentage settings are
+also cleaned up automatically on startup.
 
 ## Config File
 
