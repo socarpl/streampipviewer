@@ -12,6 +12,8 @@ internal sealed class StreamHostForm : Form
     private const int CommandShutdown = 4;
     private const int MutedVolume = 0;
     private const int UnmutedVolume = 100;
+    private const int WsExToolWindow = 0x00000080;
+    private const int WsExAppWindow = 0x00040000;
 
     private readonly HostOptions options;
     private readonly LibVLC libVlc;
@@ -73,6 +75,24 @@ internal sealed class StreamHostForm : Form
         }
 
         Shown += (_, _) => StartPlayback();
+    }
+
+    /// <summary>
+    /// Excludes embedded hosts from Alt+Tab from their first native handle creation,
+    /// including any later handle recreation. Standalone diagnostic windows keep normal styles.
+    /// </summary>
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var parameters = base.CreateParams;
+            if (options?.Hosted == true)
+            {
+                parameters.ExStyle = (parameters.ExStyle | WsExToolWindow) & ~WsExAppWindow;
+            }
+
+            return parameters;
+        }
     }
 
     /// <summary>

@@ -27,6 +27,9 @@ The application has two executable projects:
 
 The main app starts each host with `--hosted`, finds the host window by process ID, embeds that window into the matching video surface, and sends mute, unmute, restart, and shutdown commands to that process.
 
+Embedded stream hosts are excluded from the taskbar and Alt+Tab, leaving one entry
+for the main viewer. Hosts launched without `--hosted` remain normal diagnostic windows.
+
 This design exists because some native playback backends can share audio behavior inside one process. Isolating each stream into its own process makes `Mute Main Stream`, `Mute PIP Stream`, `Mute All`, and `Unmute All` behave independently.
 
 Hosted startup is equivalent to:
