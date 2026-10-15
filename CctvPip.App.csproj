@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Remove="CctvPip.StreamHost\**\*.cs" />
+    <Compile Remove="tests\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -97,8 +97,9 @@ internal sealed class MainWindowMouseHook : IDisposable
     /// <param name="screenPoint">The mouse position in screen coordinates.</param>
     private void HandleMouseMessage(int message, Point screenPoint)
     {
-        if (!isMouseActionAllowed(screenPoint))
+        if (!CanHandleMouseAt(screenPoint))
         {
+            lastLeftClickAt = DateTime.MinValue;
             return;
         }
 
@@ -106,7 +107,7 @@ internal sealed class MainWindowMouseHook : IDisposable
         {
             BeginOnOwner(() =>
             {
-                if (isMouseActionAllowed(screenPoint))
+                if (CanHandleMouseAt(screenPoint))
                 {
                     contextMenu.Show(owner, owner.PointToClient(screenPoint));
                 }
@@ -119,6 +120,11 @@ internal sealed class MainWindowMouseHook : IDisposable
             lastLeftClickAt = DateTime.MinValue;
             BeginOnOwner(() =>
             {
+                if (!CanHandleMouseAt(screenPoint))
+                {
+                    return;
+                }
+
                 if (isPointInsidePip(screenPoint))
                 {
                     swapStreams();
@@ -132,6 +138,24 @@ internal sealed class MainWindowMouseHook : IDisposable
 
         lastLeftClickAt = DateTime.UtcNow;
         lastLeftClickPoint = screenPoint;
+    }
+
+    /// <summary>
+    /// Checks that the exposed window under the pointer is the viewer or one of its native children.
+    /// Embedded stream windows belong to other processes, so native ancestry is used instead of process identity.
+    /// </summary>
+    /// <param name="screenPoint">The mouse position in screen coordinates.</param>
+    /// <returns><see langword="true"/> when the viewer can handle a mouse action at this point.</returns>
+    private bool CanHandleMouseAt(Point screenPoint)
+    {
+        if (owner.IsDisposed || !owner.IsHandleCreated || !owner.Visible ||
+            owner.WindowState == FormWindowState.Minimized || !isMouseActionAllowed(screenPoint))
+        {
+            return false;
+        }
+
+        var window = WindowFromPoint(new NativePoint(screenPoint.X, screenPoint.Y));
+        return window != IntPtr.Zero && (window == owner.Handle || IsChild(owner.Handle, window));
     }
 
     /// <summary>
@@ -206,7 +230,27 @@ internal sealed class MainWindowMouseHook : IDisposable
     {
         public readonly int X;
         public readonly int Y;
+
+        public NativePoint(int x, int y)
+        {
+            X = x;
+            Y = y;
+        }
     }
+
+    /// <summary>Gets the visible native window under a point in screen coordinates.</summary>
+    /// <param name="point">The screen point to hit-test.</param>
+    /// <returns>The window at the point, or zero when none exists.</returns>
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(NativePoint point);
+
+    /// <summary>Checks native child ancestry, including windows hosted from another process.</summary>
+    /// <param name="parent">The ancestor window handle.</param>
+    /// <param name="window">The potential child window handle.</param>
+    /// <returns>Whether the window is a descendant of the supplied parent.</returns>
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsChild(IntPtr parent, IntPtr window);
 
     /// <summary>
     /// Installs a Windows hook procedure.
