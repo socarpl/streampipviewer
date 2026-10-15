@@ -3,8 +3,8 @@ namespace CctvPip.App;
 internal sealed record AppSettings(
     string Cctv1Url,
     string Cctv2Url,
-    int PipX,
-    int PipY,
+    double PipLeftPercent,
+    double PipTopPercent,
     double PipScale,
     Color PipBorderColor,
     int PipBorderSize)
@@ -19,8 +19,8 @@ internal sealed record AppSettings(
         return new AppSettings(
             config.Cctv1Url,
             config.Cctv2Url,
-            config.PipX,
-            config.PipY,
+            config.PipLeftPercent,
+            config.PipTopPercent,
             config.PipScale,
             config.PipBorderColor,
             config.PipBorderSize);

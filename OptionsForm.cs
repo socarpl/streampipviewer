@@ -11,8 +11,8 @@ internal sealed class OptionsForm : Form
     private readonly TextBox cctv1UrlTextBox = new();
     private readonly TextBox cctv2UrlTextBox = new();
     private readonly TrackBar pipScaleSlider = new();
-    private readonly NumericUpDown pipXInput = new();
-    private readonly NumericUpDown pipYInput = new();
+    private readonly NumericUpDown pipLeftInput = new();
+    private readonly NumericUpDown pipTopInput = new();
     private readonly NumericUpDown borderSizeInput = new();
     private readonly Button borderColorButton = new();
     private readonly Label configPathLabel = new();
@@ -60,21 +60,6 @@ internal sealed class OptionsForm : Form
     }
 
     /// <summary>
-    /// Updates the maximum allowed PIP X and Y coordinates based on the current main-stage size.
-    /// </summary>
-    /// <param name="maxX">The maximum allowed PIP X coordinate.</param>
-    /// <param name="maxY">The maximum allowed PIP Y coordinate.</param>
-    public void SetCoordinateLimits(int maxX, int maxY)
-    {
-        updatingControls = true;
-        pipXInput.Maximum = Math.Max(0, maxX);
-        pipYInput.Maximum = Math.Max(0, maxY);
-        pipXInput.Value = Math.Clamp(draftSettings.PipX, (int)pipXInput.Minimum, (int)pipXInput.Maximum);
-        pipYInput.Value = Math.Clamp(draftSettings.PipY, (int)pipYInput.Minimum, (int)pipYInput.Maximum);
-        updatingControls = false;
-    }
-
-    /// <summary>
     /// Replaces the dialog draft settings and updates all controls without firing preview updates.
     /// </summary>
     /// <param name="settings">The settings snapshot that should be displayed by the dialog controls.</param>
@@ -85,8 +70,8 @@ internal sealed class OptionsForm : Form
         cctv1UrlTextBox.Text = draftSettings.Cctv1Url;
         cctv2UrlTextBox.Text = draftSettings.Cctv2Url;
         pipScaleSlider.Value = Math.Clamp((int)Math.Round(draftSettings.PipScale * 100), pipScaleSlider.Minimum, pipScaleSlider.Maximum);
-        pipXInput.Value = Math.Clamp(draftSettings.PipX, (int)pipXInput.Minimum, (int)pipXInput.Maximum);
-        pipYInput.Value = Math.Clamp(draftSettings.PipY, (int)pipYInput.Minimum, (int)pipYInput.Maximum);
+        pipLeftInput.Value = (decimal)Math.Clamp(draftSettings.PipLeftPercent, 0, 100);
+        pipTopInput.Value = (decimal)Math.Clamp(draftSettings.PipTopPercent, 0, 100);
         borderSizeInput.Value = Math.Clamp(draftSettings.PipBorderSize, (int)borderSizeInput.Minimum, (int)borderSizeInput.Maximum);
         borderColorButton.BackColor = draftSettings.PipBorderColor;
         borderColorButton.ForeColor = GetReadableTextColor(draftSettings.PipBorderColor);
@@ -159,7 +144,7 @@ internal sealed class OptionsForm : Form
         pipScaleSlider.Minimum = 10;
         pipScaleSlider.Maximum = 60;
         pipScaleSlider.TickFrequency = 5;
-        pipScaleSlider.Width = 190;
+        pipScaleSlider.Width = 150;
         pipScaleSlider.Scroll += (_, _) =>
         {
             if (updatingControls)
@@ -171,19 +156,19 @@ internal sealed class OptionsForm : Form
             previewSettings(draftSettings);
         };
 
-        ConfigureNumberInput(pipXInput);
-        ConfigureNumberInput(pipYInput);
+        ConfigureNumberInput(pipLeftInput);
+        ConfigureNumberInput(pipTopInput);
         ConfigureBorderSizeInput(borderSizeInput);
-        pipXInput.ValueChanged += (_, _) => UpdatePipCoordinate();
-        pipYInput.ValueChanged += (_, _) => UpdatePipCoordinate();
+        pipLeftInput.ValueChanged += (_, _) => UpdatePipPosition();
+        pipTopInput.ValueChanged += (_, _) => UpdatePipPosition();
         borderSizeInput.ValueChanged += (_, _) => UpdateBorderSize();
 
         pipRow.Controls.Add(CreatePipCaption("PIP Size"));
         pipRow.Controls.Add(pipScaleSlider);
-        pipRow.Controls.Add(CreatePipCaption("PIP X"));
-        pipRow.Controls.Add(pipXInput);
-        pipRow.Controls.Add(CreatePipCaption("PIP Y"));
-        pipRow.Controls.Add(pipYInput);
+        pipRow.Controls.Add(CreatePipCaption("Left (%)"));
+        pipRow.Controls.Add(pipLeftInput);
+        pipRow.Controls.Add(CreatePipCaption("Top (%)"));
+        pipRow.Controls.Add(pipTopInput);
         pipRow.Controls.Add(CreatePipCaption("Border"));
         pipRow.Controls.Add(borderSizeInput);
 
@@ -303,15 +288,16 @@ internal sealed class OptionsForm : Form
     }
 
     /// <summary>
-    /// Applies standard range, alignment, and spacing settings to a numeric PIP coordinate input.
+    /// Configures a percentage offset from the main video area's left or top edge.
     /// </summary>
     /// <param name="input">The numeric input control to configure.</param>
     private static void ConfigureNumberInput(NumericUpDown input)
     {
         input.Minimum = 0;
-        input.Maximum = 10000;
+        input.Maximum = 100;
         input.Width = 78;
-        input.Increment = 10;
+        input.DecimalPlaces = 2;
+        input.Increment = 0.1M;
         input.TextAlign = HorizontalAlignment.Right;
         input.Margin = new Padding(0, 12, 0, 0);
     }
@@ -331,9 +317,9 @@ internal sealed class OptionsForm : Form
     }
 
     /// <summary>
-    /// Copies PIP coordinate input values into the draft settings and previews the layout.
+    /// Copies PIP percentage offsets into the draft settings and previews the layout.
     /// </summary>
-    private void UpdatePipCoordinate()
+    private void UpdatePipPosition()
     {
         if (updatingControls)
         {
@@ -342,8 +328,8 @@ internal sealed class OptionsForm : Form
 
         draftSettings = draftSettings with
         {
-            PipX = (int)pipXInput.Value,
-            PipY = (int)pipYInput.Value
+            PipLeftPercent = (double)pipLeftInput.Value,
+            PipTopPercent = (double)pipTopInput.Value
         };
         previewSettings(draftSettings);
     }

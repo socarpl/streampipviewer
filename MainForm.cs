@@ -37,13 +37,14 @@ internal sealed class MainForm : Form
     public MainForm(AppConfig config)
     {
         this.config = config;
-        currentSettings = AppSettings.FromConfig(config);
 
         Text = "Stream PIP Viewer";
         BackColor = Color.Black;
         MinimumSize = new Size(960, 620);
         StartPosition = FormStartPosition.CenterScreen;
         SetInitialSize();
+        config.InitializePipPosition(FitAspect(new Rectangle(Point.Empty, ClientSize), VideoAspectRatio).Size);
+        currentSettings = AppSettings.FromConfig(config);
 
         stage.BackColor = Color.Black;
         stage.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
@@ -64,6 +65,8 @@ internal sealed class MainForm : Form
         ApplyLayout();
 
         Resize += (_, _) => ApplyLayout();
+        // Run after WinForms finishes scaling child controls for the new monitor's DPI.
+        DpiChanged += (_, _) => BeginInvoke((Action)ApplyLayout);
         Shown += (_, _) =>
         {
             cctv1Player.Start();
@@ -125,57 +128,16 @@ internal sealed class MainForm : Form
         main.Padding = Padding.Empty;
         main.BackColor = Color.Black;
 
-        var pipBounds = GetClampedPipBounds(stage.ClientSize);
+        var pipBounds = PipLayout.GetBounds(stage.ClientSize, currentSettings.PipScale,
+            currentSettings.PipLeftPercent, currentSettings.PipTopPercent);
         pip.Bounds = pipBounds;
         pip.BorderStyle = BorderStyle.None;
         pip.BackColor = currentSettings.PipBorderColor;
         pip.Padding = new Padding(currentSettings.PipBorderSize);
         pip.BringToFront();
 
-        UpdateOptionsCoordinateLimits(pipBounds.Size);
         cctv1Player?.ResizeToHost();
         cctv2Player?.ResizeToHost();
-    }
-
-    /// <summary>
-    /// Calculates PIP bounds from the current scale and coordinates while clamping them to the visible main area.
-    /// </summary>
-    /// <param name="mainSize">The current size of the main video stage.</param>
-    /// <returns>The clamped PIP rectangle relative to the stage.</returns>
-    private Rectangle GetClampedPipBounds(Size mainSize)
-    {
-        var width = Math.Clamp((int)Math.Round(mainSize.Width * currentSettings.PipScale), 160, Math.Max(160, mainSize.Width));
-        var height = Math.Max(90, (int)Math.Round(width / VideoAspectRatio));
-
-        if (height > mainSize.Height)
-        {
-            height = mainSize.Height;
-            width = Math.Max(160, (int)Math.Round(height * VideoAspectRatio));
-        }
-
-        var maxX = Math.Max(0, mainSize.Width - width);
-        var maxY = Math.Max(0, mainSize.Height - height);
-        var x = Math.Clamp(currentSettings.PipX, 0, maxX);
-        var y = Math.Clamp(currentSettings.PipY, 0, maxY);
-
-        if (x != currentSettings.PipX || y != currentSettings.PipY)
-        {
-            currentSettings = currentSettings with { PipX = x, PipY = y };
-            optionsForm?.RefreshFromSettings(currentSettings);
-        }
-
-        return new Rectangle(x, y, width, height);
-    }
-
-    /// <summary>
-    /// Updates the settings dialog's maximum PIP coordinate values for the current stage and PIP size.
-    /// </summary>
-    /// <param name="pipSize">The current PIP size used to compute maximum X and Y values.</param>
-    private void UpdateOptionsCoordinateLimits(Size pipSize)
-    {
-        optionsForm?.SetCoordinateLimits(
-            Math.Max(0, stage.ClientSize.Width - pipSize.Width),
-            Math.Max(0, stage.ClientSize.Height - pipSize.Height));
     }
 
     /// <summary>

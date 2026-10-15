@@ -63,6 +63,17 @@ internal static class Program
             OpenAt(PipPoint());
             Check(ReferenceEquals(Field(form, "contextMenuPlayer"), firstPlayer), "PIP click targets CCTV1 after swap");
             Check(Field(form, "contextMenuPlayer") != null && reconnect.Enabled, "Reconnect remains enabled for the selected stream");
+            var originalSettings = Field(form, "currentSettings");
+            foreach (var size in new[] { new Size(3840, 2160), new Size(1000, 700), new Size(1920, 1080) })
+            {
+                form.ClientSize = size;
+                Call(form, "ApplyLayout");
+                var stage = (Control)Field(form, "stage")!;
+                var pip = (Control)Field(form, "cctv1View")!; // Feeds are swapped above.
+                Check(Math.Abs(pip.Left - stage.Width * .70) <= 1 && Math.Abs(pip.Top - stage.Height * .04) <= 1,
+                    $"Real form keeps PIP at 70% / 4% when resized to {size.Width} by {size.Height}");
+            }
+            Check(ReferenceEquals(originalSettings, Field(form, "currentSettings")), "Resizing does not overwrite the requested position");
             Console.WriteLine("All reconnect-target regression checks passed.");
             return 0;
         }

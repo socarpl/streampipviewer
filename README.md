@@ -90,8 +90,8 @@ Available settings:
 - CCTV1 source URL.
 - CCTV2 source URL.
 - PIP size.
-- PIP X position.
-- PIP Y position.
+- PIP left margin as a percentage of the main video width.
+- PIP top margin as a percentage of the main video height.
 - PIP border color.
 - PIP border size from 0 to 100 px.
 - Swap streams.
@@ -103,6 +103,16 @@ Settings behavior:
 - Source URL and setting changes are written to config only after clicking `Save`.
 - `Cancel` restores the config-backed view and does not write changes.
 - If either source URL changes on `Save`, both streams reload.
+
+PIP position uses the top-left corner of the main video area as its origin, excluding
+black letterbox bars. `Left (%) = 10` and `Top (%) = 10` place PIP at `(100, 50)` in a
+1000 x 500 video area, or `(200, 100)` in a 2000 x 1000 area. Position and size follow
+window resizing, fullscreen, and monitor changes. PIP stays fully inside the video
+area; temporary clamping does not change your chosen percentages.
+
+Older `pip.x` / `pip.y` pixel settings are converted once using the initial video
+area size. Existing percentage settings take precedence. Legacy keys are retained
+for older app versions; this version uses `pip.left.percent` / `pip.top.percent`.
 
 ## Config File
 
@@ -119,8 +129,8 @@ cctv1.url=rtsp://192.168.0.999:554/cam/realmonitor?channel=1&subtype=0&unicast=t
 cctv2.url=rtsp://192.168.0.998:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
 pip.border.color=#FFFFFF
 pip.border.size=2
-pip.x=1450
-pip.y=40
+pip.left.percent=70
+pip.top.percent=4
 pip.scale=0.28
 reconnect.attempts=3
 reconnect.delay.ms=1500

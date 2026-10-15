@@ -60,16 +60,47 @@ internal sealed class AppConfig : IDisposable
         set => Set("pip.border.size", Math.Clamp(value, 0, 100).ToString(CultureInfo.InvariantCulture));
     }
 
-    public int PipX
+    public double PipLeftPercent
     {
-        get => GetInt("pip.x", 1450);
-        set => Set("pip.x", value.ToString(CultureInfo.InvariantCulture));
+        get => Math.Clamp(GetDouble("pip.left.percent", 70), 0, 100);
+        set => Set("pip.left.percent", Math.Clamp(value, 0, 100).ToString("0.###", CultureInfo.InvariantCulture));
     }
 
-    public int PipY
+    public double PipTopPercent
     {
-        get => GetInt("pip.y", 40);
-        set => Set("pip.y", value.ToString(CultureInfo.InvariantCulture));
+        get => Math.Clamp(GetDouble("pip.top.percent", 4), 0, 100);
+        set => Set("pip.top.percent", Math.Clamp(value, 0, 100).ToString("0.###", CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// Converts legacy pixel coordinates once, preserving their clamped position in the initial video area.
+    /// Existing percentage values take precedence; legacy keys remain available for older app versions.
+    /// </summary>
+    public void InitializePipPosition(Size initialMainSize)
+    {
+        if (initialMainSize.Width <= 0 || initialMainSize.Height <= 0)
+        {
+            return;
+        }
+
+        var pipSize = PipLayout.GetBounds(initialMainSize, PipScale, 0, 0).Size;
+        var changed = false;
+        if (properties.Get("pip.left.percent") is null)
+        {
+            var x = Math.Clamp(GetInt("pip.x", 1450), 0, initialMainSize.Width - pipSize.Width);
+            SetWithoutSave("pip.left.percent", (x * 100.0 / initialMainSize.Width).ToString("0.###", CultureInfo.InvariantCulture));
+            changed = true;
+        }
+        if (properties.Get("pip.top.percent") is null)
+        {
+            var y = Math.Clamp(GetInt("pip.y", 40), 0, initialMainSize.Height - pipSize.Height);
+            SetWithoutSave("pip.top.percent", (y * 100.0 / initialMainSize.Height).ToString("0.###", CultureInfo.InvariantCulture));
+            changed = true;
+        }
+        if (changed)
+        {
+            Save();
+        }
     }
 
     public double PipScale
@@ -138,8 +169,8 @@ internal sealed class AppConfig : IDisposable
         SetWithoutSave("cctv2.url", settings.Cctv2Url);
         SetWithoutSave("pip.border.color", ColorTranslator.ToHtml(settings.PipBorderColor));
         SetWithoutSave("pip.border.size", Math.Clamp(settings.PipBorderSize, 0, 100).ToString(CultureInfo.InvariantCulture));
-        SetWithoutSave("pip.x", settings.PipX.ToString(CultureInfo.InvariantCulture));
-        SetWithoutSave("pip.y", settings.PipY.ToString(CultureInfo.InvariantCulture));
+        SetWithoutSave("pip.left.percent", Math.Clamp(settings.PipLeftPercent, 0, 100).ToString("0.###", CultureInfo.InvariantCulture));
+        SetWithoutSave("pip.top.percent", Math.Clamp(settings.PipTopPercent, 0, 100).ToString("0.###", CultureInfo.InvariantCulture));
         SetWithoutSave("pip.scale", settings.PipScale.ToString("0.###", CultureInfo.InvariantCulture));
         Save();
     }
@@ -232,7 +263,7 @@ internal sealed class AppConfig : IDisposable
     /// <returns>The parsed floating-point value or the fallback value.</returns>
     private double GetDouble(string key, double fallback)
     {
-        return double.TryParse(Get(key), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+        return double.TryParse(Get(key), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value)
             ? value
             : fallback;
     }
@@ -277,8 +308,14 @@ internal sealed class AppConfig : IDisposable
         properties.Ensure("cctv2.url", "rtsp://192.168.0.998:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif");
         properties.Ensure("pip.border.color", "#FFFFFF");
         properties.Ensure("pip.border.size", "2");
-        properties.Ensure("pip.x", "1450");
-        properties.Ensure("pip.y", "40");
+        if (properties.Get("pip.x") is null)
+        {
+            properties.Ensure("pip.left.percent", "70");
+        }
+        if (properties.Get("pip.y") is null)
+        {
+            properties.Ensure("pip.top.percent", "4");
+        }
         properties.Ensure("pip.scale", "0.28");
         properties.Ensure("reconnect.attempts", "3");
         properties.Ensure("reconnect.delay.ms", "1500");

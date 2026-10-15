@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\PipLayout.cs" Link="PipLayout.cs" />
+    <Compile Include="..\..\AppSettings.cs" Link="AppSettings.cs" />
+    <Compile Include="..\..\AppConfig.cs" Link="AppConfig.cs" />
+    <Compile Include="..\..\PropertiesFile.cs" Link="PropertiesFile.cs" />
+    <Compile Include="..\..\OptionsForm.cs" Link="OptionsForm.cs" />
+  </ItemGroup>
+</Project>
