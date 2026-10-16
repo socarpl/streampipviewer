@@ -1,337 +1,882 @@
 # AI Generation Instructions: Stream PIP Viewer
 
-Create a lightweight desktop Stream Picture-in-Picture viewer. The implementation technology is not fixed. Choose any stack that can provide efficient RTSP/H.264 playback, low CPU usage, and reliable desktop UI behavior.
+## 1. Reproduction target
 
-## Core Goal
+Recreate the Windows application described here, including its behavior, appearance,
+file formats, native Windows workarounds, versioning, and release automation.
+Deliver working source, regression tests, and a runnable build, not a UI prototype.
+This document replaces all earlier generation instructions.
 
-Build an app that displays two RTSP/H.264 CCTV feeds:
+Source snapshot: origin/main commit 1cc68c3, tagged v1.0.2.2, reviewed on 2026-10-16
+at https://github.com/socarpl/streampipviewer. The previous instruction update was
+a1779c8 on 2026-08-24. All 14 subsequent commits through 1cc68c3 are incorporated.
+The tracked filename is ai_gen_instructions.txt; no separate ai_get_instructions.txt
+exists in this repository.
 
-- One feed as the main video.
-- One feed as a smaller PIP overlay.
-- Default: `CCTV1` main, `CCTV2` PIP.
-- Default: both streams start muted.
+This specification needs no earlier chat or screenshot. Appendix A includes the
+exact icon assets. Reproduce this snapshot's actual behavior; legacy limitations
+are identified explicitly. Equivalence means matching behavior and assets, not
+byte-identical compiler output or identical pixels across Windows themes/DPI.
 
-The app must prioritize:
+## 2. Technology, identity, and dependencies
 
-- Low CPU usage.
-- Native or hardware-assisted H.264 decoding where available.
-- High visual quality.
-- Minimal unnecessary frame copying.
+Use C#, .NET 8, Windows Forms, and net8.0-windows. Both executable projects use
+OutputType=WinExe, UseWindowsForms=true, Nullable=enable, ImplicitUsings=enable,
+ApplicationHighDpiMode=PerMonitorV2, STA entry points, and
+ApplicationConfiguration.Initialize(). Exact NuGet packages in BOTH projects:
 
-Avoid:
+- LibVLCSharp 3.8.5.
+- LibVLCSharp.WinForms 3.8.5.
+- VideoLAN.LibVLC.Windows 3.0.21, including native playback dependencies.
+- NLog 6.2.1.
 
-- MJPEG conversion for display.
-- Re-encoding H.264 just to show the stream.
-- Raw frame pipelines where the app manually receives and paints full-resolution frames.
+Identity and filenames:
 
-Prefer:
+- Main executable/assembly: StreamPipViewer.exe / StreamPipViewer.dll.
+- Main project: CctvPip.App.csproj. AssemblyName and Product: StreamPipViewer.
+- Keep main RootNamespace/source namespace CctvPip.App for compatibility.
+- Main window title: Stream PIP Viewer. Settings title: PIP Settings.
+- Helper project: CctvPip.StreamHost/CctvPip.StreamHost.csproj.
+- Helper executable and namespace: CctvPip.StreamHost.exe / CctvPip.StreamHost.
+- Active stream configuration: stream-pip.config, a properties-format text file.
+- Separate logging configuration: logging.config, NLog XML.
+- Application/forms icon for both executables: assets/pip.ico.
 
-- Native player/decoder backend.
-- Embedded video surfaces.
-- Efficient compositor/video overlay pipeline.
-- Separate playback worker processes if the chosen backend applies audio state process-wide or otherwise cannot isolate audio per player instance.
+Use Stream1/Stream2 in explanatory documentation. Preserve compatibility config/CLI
+keys cctv1/cctv2, enum identifiers StreamId.Cctv1/Cctv2, and runtime diagnostic labels
+CCTV1/CCTV2. The documentation rename did not rename those runtime strings.
 
-## Required Architecture
+Preserve the MIT license and attribution:
+Copyright (c) 2026 Marek 'SOCAR' Małecki https://www.socar.pl
 
-Use a shell app plus a single-stream host process when implementing with LibVLC, VLC, or any playback backend that may share audio state inside one process.
+## 3. Playback architecture and source responsibilities
 
-Recommended Windows implementation:
+Display two RTSP/H.264 streams. Stream1 initially fills the main view; Stream2 is
+PIP. Both start muted every launch. Prioritize low CPU use, native/hardware-assisted
+decoding, aspect ratio preservation, and native player quality. Do not re-encode
+to MJPEG or manually copy/paint decoded full-resolution frames.
 
-- Main executable: `CctvPip.App`.
-- Host executable: `CctvPip.StreamHost`.
-- `CctvPip.App` owns layout, MainWindow/PIP role mapping, context menu, fullscreen, settings, and config persistence.
-- `CctvPip.StreamHost` owns exactly one native player instance and plays exactly one stream.
-- Launch one host process for `CCTV1` and one host process for `CCTV2`.
-- Build the main app so it also builds/copies the host executable and all native playback dependencies into a `StreamHost` subfolder beside the main output.
+Use a shell and TWO SEPARATE stream-host processes. Each host owns exactly one
+LibVLC instance, MediaPlayer, and VideoView. This is required to avoid the earlier
+bug where audio changes affected both streams inside one process. The shell embeds
+the hosts' real native windows and owns layout, menus, settings, and persistence.
 
-In hosted mode, the main app should launch hosts similarly to:
+Recommended source organization matching the snapshot:
 
-```text
-CctvPip.StreamHost.exe --hosted --stream cctv1 --label CCTV1 --config <config-path>
-CctvPip.StreamHost.exe --hosted --stream cctv2 --label CCTV2 --config <config-path>
-```
+- Program.cs: WinForms/LibVLC initialization, errors, logging lifecycle.
+- MainForm.cs: stage, roles, menus, fullscreen, settings integration.
+- CameraView.cs: video container and shell status overlay.
+- HostedStreamProcess.cs: launch/find/embed/resize/control/stop one helper.
+- MainWindowMouseHook.cs: native video mouse routing and occlusion checks.
+- PipLayout.cs: pure percentage geometry.
+- AppConfig.cs, PropertiesFile.cs, AppSettings.cs: persisted config and draft snapshot.
+- OptionsForm.cs, SettingsFileOperations.cs: native settings and file operations.
+- AppIcon.cs: shared embedded icon loader in namespace CctvPip.
+- AppLog.cs, BudgetFileTarget.cs: shared logging in namespace CctvPip.
+- CctvPip.StreamHost/{Program,HostOptions,StreamHostForm}.cs: helper implementation.
+- Directory.Build.props/targets: shared four-part versions.
+- .github/workflows/build-windows.yml and .github/scripts/release.cjs: releases.
 
-Hosted process behavior:
+The original source also has an UNUSED in-process StreamPlayer.cs with automatic
+retry logic. MainForm does not instantiate it. Do not treat it as the active player
+or replace process isolation with it. Recreating unused code is not required for
+runtime equivalence; section 8 specifies the actual retry boundary.
 
-- `--hosted` makes the host borderless and suitable for embedding.
-- The host should create a real top-level window before or during playback startup.
-- The shell app should find the child window by process ID, not only by a framework-provided main-window property that may stay empty for hidden, borderless, or off-screen windows.
-- The shell app should embed the host window into the appropriate video surface using the platform's native child-window mechanism.
-- The shell app should resize embedded host windows when the main layout changes.
-- The shell app should send mute, unmute, restart, and shutdown commands to the correct child process.
-- The shell app should preserve per-stream mute state and reapply it after host restarts.
-- Closing the main app should close both host processes cleanly, then terminate them if they do not exit.
+## 4. Host launch, embedding, IPC, and shutdown
 
-The host executable must also work as a normal standalone diagnostic app when `--hosted` is omitted.
-
-Standalone host behavior:
-
-- Opens as a normal visible window.
-- Reads `--stream cctv1` or `--stream cctv2` and `--config <path>`.
-- Allows `--url <rtsp-url>` to override config.
-- Allows `--label <text>` to customize the title/status label.
-- Starts muted by default.
-- Starts unmuted only when `--unmuted` is present.
-- Supports right-click menu actions for mute/unmute and restart.
-- Supports keyboard shortcuts: `M` toggles mute and `R` restarts playback.
-
-## Default Sources
-
-Use these default source URLs:
-
-```properties
-cctv1.url=rtsp://192.168.0.999:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
-cctv2.url=rtsp://192.168.0.998:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
-```
-
-Use `subtype=0` by default because it is the higher-quality stream.
-
-## Video Layout
-
-Implement:
-
-- Main video surface.
-- PIP video overlay.
-- Black background for letterboxing/pillarboxing.
-- Aspect-ratio preservation.
-- PIP border.
-- Default PIP border color: white.
-- Configurable PIP border size from 0 to 100 px, where 0 means no border.
-- PIP X/Y coordinates relative to the top-left of the main video surface.
-- PIP size as a fraction of the main video width.
-- PIP clamping so it cannot disappear fully outside the visible video area.
-
-Suggested defaults:
-
-```properties
-pip.border.color=#FFFFFF
-pip.border.size=2
-pip.x=1450
-pip.y=40
-pip.scale=0.28
-```
-
-## Runtime Operations
-
-Implement these operations:
-
-- Swap feeds.
-- Mute all streams.
-- Unmute all streams.
-- Toggle mute for the stream currently displayed in the main window.
-- Toggle mute for the stream currently displayed in the PIP window.
-- Enter fullscreen.
-- Exit fullscreen.
-- Open settings.
-- Open active config file.
-- Change PIP size.
-- Change PIP X position.
-- Change PIP Y position.
-- Change PIP border color.
-- Change CCTV1 source URL.
-- Change CCTV2 source URL.
-- Save settings.
-- Cancel settings.
-
-## Mouse And Keyboard Behavior
-
-Context menu on right-click over the video window:
+Use ProcessStartInfo.ArgumentList, UseShellExecute=false, and the helper directory
+as working directory. Do not construct shell command strings. Launch:
 
 ```text
+CctvPip.StreamHost.exe --hosted --stream cctv1 --label CCTV1 --config <active-config-path>
+CctvPip.StreamHost.exe --hosted --stream cctv2 --label CCTV2 --config <active-config-path>
+```
+
+Add --unmuted only if that controller remembers an unmuted state. Pass the shared
+logging environment variables from section 12. Resolve the helper first under
+StreamHost beside the viewer, then beside the viewer, then from the helper's
+development bin/Debug/net8.0-windows output as a fallback.
+
+Hosted windows are borderless, ShowInTaskbar=false, initially off-screen at
+(-32000,-32000), but create a real native window. Wait up to 8 seconds, polling
+about every 50 ms, checking early process exit. Try MainWindowHandle AND enumerate
+visible top-level windows by process ID and expected title prefix. MainWindowHandle
+alone may remain zero for off-screen/borderless helper windows.
+
+Embed with SetParent into the matching shell VideoView.Handle, add WS_CHILD and
+WS_VISIBLE, remove WS_POPUP, show the host, and MoveWindow to fill the video surface.
+Resize both hosts on every layout change.
+
+Use native message WM_APP+321 (0x8000+321), wParam values:
+
+| Value | Action |
+| --- | --- |
+| 1 | Mute |
+| 2 | Unmute |
+| 3 | Restart playback inside this helper |
+| 4 | Shut down this helper |
+
+The shell's Reconnect stops/starts the selected helper PROCESS, preserving its
+controller and audio state. Standalone Restart recreates the MediaPlayer within
+the same process. Do not confuse these two actions.
+
+On shutdown, clear stored process/window references, send command 4 if possible,
+wait 1500 ms, Kill(entireProcessTree:true) if still running, wait another 1500 ms,
+and dispose the Process. Unsubscribe resize handlers. Closing the viewer disposes
+both hosts, settings, menus, and the mouse hook. The snapshot's discovery/shutdown
+waits are synchronous; do not promise asynchronous/nonblocking host startup.
+
+### Alt+Tab workaround
+
+ShowInTaskbar=false alone previously left two blank helper entries in Alt+Tab.
+Override StreamHostForm.CreateParams: for --hosted, add WS_EX_TOOLWINDOW (0x80)
+and remove WS_EX_APPWINDOW (0x40000). Apply on FIRST native handle creation and
+every recreation, not just after embedding. Only the viewer should appear in the
+taskbar/Alt+Tab for hosted operation. Standalone hosts remain normal windows there.
+
+## 5. Window, stage, PIP geometry, DPI, and fullscreen
+
+Main form: black, centered initially, minimum outer size 960x620. Initial client
+width=min(1920,max(960,primaryWorkingArea.Width-80)); client height=
+min(1166,max(620,primaryWorkingArea.Height-80)). Center the largest 16:9 stage inside
+the client area, with black letterboxing/pillarboxing. Main camera fills that stage
+without border/padding. PIP overlays it and is brought to front after layout.
+Its panel background is border color; Padding supplies border thickness.
+
+PIP position is measured from the MAIN VIDEO STAGE, not desktop/monitor pixels,
+outer form bounds, or the leftover travel after subtracting PIP dimensions:
+
+```text
+xRequested = round(stageWidth  * pip.left.percent / 100)
+yRequested = round(stageHeight * pip.top.percent  / 100)
+```
+
+Thus 10%/10% in an area 1000x500 gives (100,50); doubling the area to 2000x1000
+gives (200,100), before clamping.
+
+Exact PipLayout rules:
+
+- Non-positive stage width/height returns Rectangle.Empty.
+- Finite pip.scale clamps to 0..1; non-finite scale falls back to .28.
+- width=min(stageWidth,max(160,round(stageWidth*scale))). A displayed size of 0%
+  still gives the minimum visible PIP, capped by stage size, rather than hiding it.
+- height=max(1,round(width/(16/9))). If too tall, use stageHeight and recalculate
+  width from that height/aspect, capped inside the stage.
+- Finite left/top percentages clamp 0..100. The geometry helper uses 0 for
+  non-finite margins; AppConfig instead supplies safe defaults 70/4.
+- Clamp displayed X into 0..stageWidth-width and Y into 0..stageHeight-height.
+  The WHOLE PIP stays inside the stage, including border.
+- Never rewrite requested/saved percentages as a result of display clamping.
+  At 100%/100%, display bottom-right but keep the settings at 100/100.
+- Default scale=.28, left=70%, top=4%, border=#FFFFFF, thickness=2 px.
+- Thickness clamps to 0..100 px; 0 removes it. It is a file-only setting in the
+  current settings redesign, not a visible thickness control.
+
+Recalculate on Resize and on DpiChanged. Queue ApplyLayout with BeginInvoke AFTER
+WinForms handles DPI scaling. Maximize/restore/fullscreen and moves between mixed
+4K/1080p/DPI monitors must keep proportional position and size without saved drift.
+
+Swap changes display roles only, never reconnects sources or transfers mute state.
+Fullscreen saves Bounds, FormBorderStyle, WindowState, TopMost; clears minimum size;
+sets normal WindowState, borderless, Screen.FromControl(this).Bounds, TopMost=true.
+Exit restores those values and minimum 960x620. Normal windowed mode is coverable
+by other applications. Double-click main, menu, and Esc support entry/exit as below.
+
+## 6. Mouse routing and covered-window bug fix
+
+Native surfaces consume ordinary WinForms mouse events. Handle right-click and
+double-click over LIVE embedded video as well as non-video areas using a
+WH_MOUSE_LL (14) hook for WM_LBUTTONUP (0x202) and WM_RBUTTONUP (0x205). Keep its
+delegate alive, unhook on disposal, always CallNextHookEx, and do not swallow input.
+
+Rectangle-only hit-testing caused the viewer to steal clicks through another app
+and jump to the front. Validate BEFORE queuing and AGAIN inside the UI callback:
+
+- Owner handle exists, owner is visible/not disposed/not minimized.
+- Click is inside its client rectangle and passes the UI action guard.
+- Suppress handling while the context menu is open and over the visible settings
+  form's bounds. Settings/color/file interactions must not toggle/swap video.
+- WindowFromPoint(original SCREEN point) must return owner.Handle or a native
+  IsChild(owner.Handle,window) descendant. Native ancestry is required: embedded
+  playback descendants belong to other processes, while unrelated same-process
+  forms must be rejected. Process equality or screen rectangle is insufficient.
+- Reset pending double-click state on any rejected click.
+
+Use SystemInformation.DoubleClickTime and DoubleClickSize. A qualifying pair inside
+PIP swaps feeds; elsewhere in the main client toggles fullscreen. Marshal actions
+using BeginInvoke, tolerate owner disposal, and cancel if a covering window appears
+before execution. A rejected click must never activate/raise the viewer.
+
+## 7. Context menu, reconnect targeting, and audio
+
+Exact viewer menu order (--- is a real ToolStripSeparator):
+
+```text
+Reconnect
 Settings
-Separator
+---
 Mute All
 Unmute All
-Separator
+---
 Unmute Main Stream / Mute Main Stream
 Unmute PIP Stream / Mute PIP Stream
-Separator
+---
 Swap feeds
-Fullscreen
+Fullscreen / Exit Fullscreen
 ```
 
-Rules:
+Attach the shared menu to form, stage, camera panels, VideoViews, and status labels,
+with the hook supporting the native playback children. Fullscreen text reflects
+current mode. Esc exits fullscreen. Double-click PIP swaps; double-click main toggles.
 
-- Each `Separator` must be a real menu separator line, not text.
-- When already fullscreen, the fullscreen item should read `Exit Fullscreen`.
-- `Settings` opens the settings dialog.
-- `Mute All` mutes audio for both streams.
-- `Unmute All` unmutes audio for both streams.
-- `Unmute Main Stream / Mute Main Stream` toggles audio for the stream currently displayed in the main window.
-- `Unmute PIP Stream / Mute PIP Stream` toggles audio for the stream currently displayed in the PIP window.
-- Main/PIP mute toggles must follow the current layout after streams are swapped.
-- `Swap feeds` swaps main/PIP roles.
-- `Fullscreen` enters fullscreen.
-- `Exit Fullscreen` exits fullscreen.
+Reconnect is FIRST. Carry the ORIGINAL right-click screen point into menu opening.
+Resolve PIP vs main using the currently visible PIP rectangle, then CAPTURE THE
+ACTUAL CONTROLLER while opening the menu. Moving the pointer into the menu or
+changing roles/layout while it is open must not retarget that pending Reconnect.
+A newly opened menu after a swap resolves the new mapping. Disable Reconnect if
+there is no controller. Reconnect only that source and retain its mute state.
 
-Audio behavior:
+Both sources start muted each launch. Mute All/Unmute All affect both; role-specific
+toggles resolve the source currently shown in main/PIP and label the action to take.
+Audio state is PER SOURCE, runtime-only, and survives swap, reconnect, and settings
+source restarts. One source's audio must not alter the other.
 
-- Both streams must start muted on each app launch.
-- Mute state is runtime-only unless the implementation explicitly adds persisted audio settings.
-- Mute state must be remembered per stream during reconnects and stream restarts in the current app session.
-- Muting or unmuting one displayed role must not unexpectedly change the other stream unless the user chooses `Mute All` or `Unmute All`.
-- If the native playback library cannot independently mute two players inside one process, run each stream in a separate helper process and have the main app embed/control those helper windows.
+In each host, mute with BOTH Volume=0 and SetAudioTrack(-1), remembering the last
+non-negative active audio track. Unmute with Volume=100 and restore that track if
+possible, else the first available non-negative track. Reapply state on Playing.
+Separate processes plus this audio-track/volume workaround are required.
 
-Mouse/keyboard actions:
+## 8. Playback lifecycle, failures, and standalone host
 
-- Double-click inside the PIP rectangle swaps feeds.
-- Double-click elsewhere in the main video window toggles fullscreen.
-- Press `Esc` to exit fullscreen.
+Core.Initialize() initializes LibVLC. Construct each host's LibVLC with configured
+global options. StartPlayback stops/disposes the old MediaPlayer, creates one with
+EnableHardwareDecoding=true, attaches it to VideoView, applies audio, constructs
+Media from URL, adds that source's media options, calls Play, then disposes Media.
+Dispose player, menu, and LibVLC on closing.
 
-Important implementation note:
+Actual active-path statuses:
 
-Native video surfaces may consume mouse events. Ensure right-click and double-click work over the live video itself, not only over non-video UI. Use the platform-appropriate event hook, native hit-test, overlay input layer, or input-capturing strategy.
+- Shell CameraView initially shows label and NO SIGNAL.
+- Starting helper: STARTING HOST. Launch/window-discovery failure: HOST START FAILED
+  plus short technical detail when available.
+- After embedding, shell hides its own overlay. Host ready does NOT prove RTSP
+  playback; the host shows the actual connection/playback state.
+- Host shows STARTING, hides overlay on Playing, and reapplies mute state.
+- EncounteredError -> PLAYER ERROR; EndReached -> STREAM ENDED; false Play return
+  -> PLAY REJECTED; a thrown playback exception -> its message in the UI.
+- Host status includes label/PID; title includes label, Muted/Unmuted, PID. Marshal
+  playback UI changes to the UI thread. Shell error detail is normalized to one
+  line and truncated after 240 characters.
 
-## Fullscreen
+IMPORTANT COMPATIBILITY BOUNDARY: the active hosted implementation has NO automatic
+retry timer/attempt loop or continuous child-exit supervision. reconnect.attempts
+and reconnect.delay.ms remain legacy properties but are not consumed by the active
+host. The earlier instruction file's automatic retries and distinct
+'NO SIGNAL - Failed to connect'/'NO SIGNAL. Reconnection failed' requirements refer
+to the unused in-process player. Reproduce manual per-source Reconnect; adding
+automatic retries would change this snapshot's behavior.
 
-Fullscreen behavior:
+Without --hosted the helper is a centered normal window, client 960x540, minimum
+480x270, shown in taskbar and Alt+Tab. Right-click: Mute/Unmute, separator, Restart.
+M toggles mute; R restarts. Starts muted unless --unmuted is present. Arguments:
 
-- Hide title bar and window chrome.
-- Fill the display with the video area.
-- Preserve aspect ratio where possible.
-- Keep PIP visible.
-- Exit fullscreen with `Esc`, double-click, or context menu.
+| Argument | Meaning |
+| --- | --- |
+| --stream cctv1 or cctv2 | Select prefix; default cctv1 |
+| --config <path> | Explicit file; default stream-pip.config beside helper |
+| --url <url> | Source override; first positional argument also supplies URL |
+| --label <text> | Label override; defaults CCTV1 Host / CCTV2 Host |
+| --libvlc-options <list> | Override global comma-separated options |
+| --media-options <list> | Override selected-source comma-separated options |
+| --unmuted | Start with audio |
+| --hosted | Borderless embedded mode and Alt+Tab suppression |
 
-## Settings Dialog
+Parse argument keys case-insensitively; trim/lowercase stream selection. Resolve
+URL/options from CLI, then nonblank selected config entries, then defaults. Split
+comma option lists, trim, omit empty items. Standalone reads but does not create
+or migrate viewer configuration. Only the cctv1/cctv2 source pair is supported.
 
-Implement a non-modal settings dialog.
+## 9. Native Windows settings dialog
 
-The dialog must include:
+Non-modal OWNED form, single instance, ShowInTaskbar=false. Reopening brings the
+existing form forward and focuses it. At 96 DPI: 760x410 CLIENT size, minimum
+680x420 OUTER size, resizable with sizing grip. Use SystemFonts.MessageBoxFont,
+system colors, native WinForms controls, AutoScaleMode.Dpi with baseline 96x96,
+and ToolStripRenderMode.System. No custom dark theme.
 
-- Text field for CCTV1 source URL.
-- Text field for CCTV2 source URL.
-- PIP size control.
-- PIP X control.
-- PIP Y control.
-- PIP border color picker.
-- PIP border size control with a 0 to 100 px range.
-- Swap Streams button/control.
-- Open Config button/control.
-- Save button.
-- Cancel button.
+Layout, from top to bottom:
 
-Behavior:
+1. Standard toolbar: visible grip, four image-only 16x16 buttons.
+2. 'Video Sources' group: 'Source 1'/'Source 2' labels and two stretching URL boxes.
+3. Two EQUAL-WIDTH groups side by side. Left: 'PIP Size & Border', with a Size
+   slider/numeric/% row, then Border color centered hex box and small swatch button.
+   Right: 'PIP Position', 'Margin size from...', Left and Top slider/numeric/% rows.
+4. Bottom-right Cancel then Save buttons. Save is AcceptButton; Cancel is
+   CancelButton with CausesValidation=false.
+5. StatusStrip: active config path link at left with Spring fill, 'Version: #.#.#.#'
+   at right, native sizing grip at the corner.
 
-- PIP size, position, border color, and border size may preview immediately in the main window.
-- Do not write setting changes to config until `Save`.
-- `Save` writes changes to config.
-- `Cancel` discards changes and restores the config-backed view.
-- Closing the settings dialog without saving should behave like cancel.
-- If either source URL changes on save, reload/restart the streams.
-- Empty source URLs should be rejected.
+Use 20 px content padding, sources group height 96, 18 px gap above the two groups,
+20 px total between groups, 14 px before a 34 px button row. Buttons 75x25; swatch
+28x23. Match these captions. The redesigned dialog has NO border-thickness control,
+swap button, pixel X/Y controls, or separate Open Config button. Border thickness
+is file-only; swap is in the viewer menu; the status link opens configuration.
 
-## Config
+### Toolbar, left to right
 
-Create or load a visible local config file. Preferred name:
+| Icon | Exact tooltip | Action |
+| --- | --- | --- |
+| icon_open16.png | Open containing folder | explorer.exe opens active config folder |
+| icon_reload16.png | Reload from disk | Load active file values into controls |
+| icon_export16.png | Export settings to file | Save As a backup of current controls |
+| icon_import16.png | Import settings from file | Open file and import visible fields |
 
-```text
-cctv-pip.properties
-```
+Embed PNGs as CctvPip.App.assets.<filename>, ImageScaling=None, with matching
+accessible names/tooltips. Clone/dispose toolbar images. icon_save16.png is unused;
+Save is a normal text button. Appendix A supplies all required images.
 
-Required settings:
+### Percent and color controls
+
+Size, Left, and Top each pair TrackBar/NumericUpDown, range 0..100. Numeric controls
+have 2 decimals, increment .1, and right-aligned text. TrackBars use integer values
+and ticks every 10 on both sides. Numeric edits keep fractional draft values while
+rounding the slider away from zero at midpoint; slider edits set the numeric to
+the integer value. Guard synchronization against recursion. Size maps to scale/100;
+Left/Top are percentages directly.
+
+Hex field: six RGB hex digits, optional leading #, max 7 characters. Valid typing
+immediately changes draft/live border and swatch background. Invalid/incomplete
+text must not change the last valid color or swatch. On leaving/committing, restore
+the last valid value if invalid; normalize valid text to uppercase RRGGBB without #.
+Swatch UseVisualStyleBackColor=false. Click commits/reverts hex first, opens full
+native ColorDialog seeded with the valid color, and on OK updates text/swatch.
+
+### Preview, Save, Cancel, import, export, and external edits
+
+- Separate draft AppSettings from persisted AppConfig. Preview layout/color live;
+  source textbox edits do not restart players until Save.
+- Save trims URLs; either blank is rejected with 'Both source URLs must be filled
+  in.' Save active file, restore runtime settings from it, reapply layout, close.
+  If EITHER URL changed from pre-save config, restart BOTH source processes while
+  retaining each one's mute state. Failed Save leaves settings open.
+- Cancel, Esc, and window X discard edits and restore the persisted IN-MEMORY config
+  view. They never write config. Closing/disposal must not commit draft values.
+- Reload reads active disk file into controls, using current AppConfig values as
+  fallback for missing visible keys. It previews but does not save/apply sources.
+- Import uses OpenFileDialog, single file, filter *.config;*.properties, default
+  extension config, initial active directory. Import ONLY cctv1.url, cctv2.url,
+  pip.scale, pip.left.percent, pip.top.percent, pip.border.color. Missing keys keep
+  current draft; invisible settings cannot change, including border thickness.
+- Reject import/reload files with no supported visible key. Require finite numeric
+  scale 0..1 and margins 0..100. Import color supports hex or an opaque HTML color
+  accepted by ColorTranslator.FromHtml. Invalid imports leave controls intact.
+- Export uses SaveFileDialog with .config/.properties filters, default .config,
+  stream-pip-backup.config name, overwrite prompt. Export CURRENT unsaved controls,
+  merged over the latest active DISK contents for missing/hidden fields/comments.
+  Reject other extensions and the active file's own normalized full path, compared
+  case-insensitively. Never change/save/switch the active configuration via export.
+- Save uses the same merge over LATEST DISK CONTENTS and overwrites only visible
+  keys, preserving externally edited hidden options, custom keys, comments, and
+  border thickness. Import/reload/export do not write active config. Cancel after
+  import discards imported edits.
+- Status path click starts notepad.exe with ArgumentList containing the active path.
+  Folder button starts explorer.exe. Use native message boxes for file errors.
+- Version caption comes from Assembly.GetName().Version.ToString(4), not a hardcoded
+  string or informational version containing the Git hash.
+
+## 10. Configuration defaults, format, migrations, and persistence
+
+stream-pip.config is UTF-8/no BOM, simple key=value, NOT XML/JSON/.NET app.config.
+Prefer executable directory; if load/create/save there fails, use
+%LOCALAPPDATA%/CctvPip/stream-pip.config. Show/pass the actual resolved path.
+
+If new filename is absent and cctv-pip.properties exists in that directory, MOVE
+the old file to stream-pip.config before loading. If both exist, prefer new and
+leave old alone. Keep existing values, append missing defaults, save at startup.
+
+New-file defaults, exactly:
 
 ```properties
 cctv1.url=rtsp://192.168.0.999:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
 cctv2.url=rtsp://192.168.0.998:554/cam/realmonitor?channel=1&subtype=0&unicast=true&proto=Onvif
 pip.border.color=#FFFFFF
 pip.border.size=2
-pip.x=1450
-pip.y=40
+pip.left.percent=70
+pip.top.percent=4
 pip.scale=0.28
 reconnect.attempts=3
 reconnect.delay.ms=1500
+player.backend=libvlc
+libvlc.options=--no-video-title-show,--avcodec-hw=any
+cctv1.player.options=:rtsp-tcp,:network-caching=300,:live-caching=300
+cctv2.player.options=:rtsp-tcp,:network-caching=300,:live-caching=300
 ```
 
-If the backend supports player-specific options, keep them independently configurable per stream, for example:
+The .999/.998 addresses are intentional non-working placeholders, not private real
+cameras. Actual playback needs user URLs. Do not embed private URLs/credentials in
+generated source, instructions, test fixtures, logs, or public releases.
 
-```properties
-player.backend=native
-player.options=
-cctv1.player.options=
-cctv2.player.options=
+player.backend is compatibility metadata, not a working backend selector. The active
+backend is LibVLC. Legacy getters keep reconnect.attempts>=3 and delay>=250 ms, but
+the hosted implementation does not use them for retries (section 8).
+
+Properties parser: case-insensitive keys, last duplicate wins; split at first = or :;
+trim key/value; preserve blank lines, #/! comments, unparsed lines, and entry order.
+Save property entries as key=value. Remove must remove ALL case-insensitive duplicates.
+Use invariant-culture numbers. Non-finite/malformed margin values default to 70/4,
+then clamp 0..100; invalid scale uses .28, with layout applying its clamp. Border
+thickness clamps 0..100; invalid/blank config color falls back to white. The helper
+uses a read-only = parser skipping blank/#/; lines; canonical saved files work in both.
+
+### One-time migration from pip.x/pip.y
+
+Old pixel keys are migration INPUT only. Per axis, if no percentage is already
+present, wait for the initial fitted stage dimensions. Calculate initial PIP size,
+clamp old pixel X/Y to the visible range, convert pixelOffset*100/stageDimension,
+and save invariant with up to 3 decimals. Legacy fallback X=1450/Y=40. Explicit
+percentages win PER AXIS. Do not insert a percentage default on an axis containing
+a legacy pixel key before migration, or its intended position would be lost.
+
+After valid initialization, remove EVERY pip.x/pip.y occurrence even if percentages
+were already present; save only if conversion/cleanup changed data. Never recreate
+these keys. Resize does not rerun migration or rewrite settings. Save/export also
+remove obsolete keys. New configurations use only percentage defaults.
+
+Dialog persistence uses scale up to 4 decimals, margins up to 2, and #RRGGBB color.
+AppConfig.Dispose MUST NOT save its stale snapshot: doing so previously overwrote
+changes the user had just made externally in Notepad. Save explicitly and merge
+current disk values for fields not controlled by the dialog.
+
+## 11. Application/form icon resource behavior
+
+Decode Appendix A to assets/. Main ApplicationIcon=assets/pip.ico; helper uses
+../assets/pip.ico. Embed the same ICO in BOTH assemblies as CctvPip.pip.ico. Link
+AppIcon.cs into the helper, load with typeof(AppIcon).Assembly, and clone Icon before
+closing resource stream. Assign it to MainForm, OptionsForm, and StreamHostForm.
+Do not depend on a loose runtime ICO, redraw it, or retain default WinForms icons.
+
+## 12. NLog configuration, filenames, shared retention, and failures
+
+Use NLog 6.2.1 plus a registered custom TargetWithLayout named BudgetFile. Standard
+per-file size/file-count retention is not a combined folder-byte limit. Implement
+the following inside the NLog target shared by viewer and helpers.
+
+logging.config is independent of stream-pip.config and sits beside the viewer.
+Copy it to build/publish output; helper links the same default file. Register
+BudgetFile before parsing the XML. Default configuration:
+
+```xml
+<?xml version="1.0" encoding="utf-8" ?>
+<nlog xmlns="http://www.nlog-project.org/schemas/NLog.xsd"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      throwConfigExceptions="true">
+  <targets>
+    <target xsi:type="BudgetFile" name="session"
+            layout="${longdate}|${level:uppercase=true}|PID ${processid}|${logger}|${message}" />
+  </targets>
+  <rules>
+    <logger name="*" minlevel="Info" writeTo="session" />
+  </rules>
+</nlog>
 ```
 
-The exact key names can vary, but each stream must be independently configurable.
+Changes apply on next app/process start, not live reload. NLog severity levels
+include Trace, Debug, Info, Warn, Error, Fatal, Off; existing events use Info/Warn/Error.
+Missing config uses defaults. XML/NLog config or file-read errors fall back to
+defaults and safely log 'Invalid logging.config; using default logging'. If no
+BudgetFile target named session exists, add one with an Info-through-Fatal rule.
+Set its directory/session programmatically to enforce the required destination.
 
-## No-Signal States
+Location is logs beside the MAIN executable for viewer and hosted children.
+A standalone diagnostic helper uses logs beside ITS executable. LocalAppData stream
+config fallback does not relocate logging.
 
-Before a stream connects, show:
+File naming uses local startup time:
 
 ```text
-NO SIGNAL
+yyyyMMddHHmmss_streampipviewer_log.txt
+20270112132522_streampipviewer_log.txt
 ```
 
-If initial connection fails after retries, show:
+Example: 12 January 2027 at 13:25:22. Every generated filename must match
+^\d{14}_streampipviewer_log\.txt$. A new viewer session starts a fresh file. Write
+UTF-8 without BOM with platform newlines. The shell explicitly passes:
+
+- STREAM_PIP_LOG_DIRECTORY: normalized full shared logs directory.
+- STREAM_PIP_LOG_SESSION: viewer's INITIAL session filename, not a full path.
+
+Children use that directory, load logging.config from its parent, and initially
+append to that shared file. Only accept inherited session names matching the regex.
+The controller retains its initial filename for later children even after its
+target rolls. Separate viewer instances also coordinate at directory level.
+
+Exact target algorithm:
+
+1. MaximumDirectoryBytes=25*1024*1024=26,214,400 (25 MiB).
+2. RollBytes=1024*1024. Render complete event/newline and measure UTF-8 bytes BEFORE
+   append. If one event exceeds 1 MiB, replace it with 'Log event omitted: exceeds
+   1 MB.' plus newline instead of breaking the limit.
+3. Protect initialization, name allocation, cleanup, rotation, and appends with a
+   named mutex Local\StreamPipLogs_ + uppercase hex SHA256 of the UTF-8 full directory
+   path uppercased invariantly. Wait up to 5 seconds; treat abandoned mutex as
+   acquired. On timeout skip the operation. Release in finally; dispose on close.
+4. Initialize directory and clean excess pre-existing files. Unless a valid inherited
+   session exists, allocate the new filename atomically with FileMode.CreateNew.
+5. On name collision increment candidate time by one SECOND until unused. Preserve
+   filename shape: no PID, sequence suffix, alternate extension, or overwriting.
+6. Before append, if current length+event bytes exceeds 1 MiB, allocate another file
+   using the same name algorithm. Processes may roll independently after sharing
+   the initial file, but all still share the combined folder budget.
+7. Recursively count ALL files under logs, skipping reparse points. Sort by oldest
+   LastWriteTimeUtc then ordinal filename. Delete oldest files until total+incoming
+   bytes<=MaximumDirectoryBytes. This is a dedicated disposable folder: nonstandard
+   files count too and are subject to cleanup, not just the current name pattern.
+8. If deletion fails due to I/O/access errors, try remaining files. If insufficient
+   room can be made, skip the write rather than exceed the budget; resume when
+   cleanup becomes possible. Pre-existing locked/external files cannot be removed
+   against Windows permissions and may prevent immediate reduction of an oversized
+   folder. Do not imply cleanup can override those locks.
+9. Append synchronously under the mutex using FileShare.Read, then close the handle.
+   No persistent writers, delayed queues, or independent 25 MiB budgets per helper.
+
+Cleanup runs on initialization and every write, not a periodic timer. Do not send
+NLog internal diagnostics or other unbudgeted writers into logs. Executable directory
+must be writable; no alternate log-folder fallback is implemented other than the
+explicit inherited shared-directory setting for hosted processes.
+
+Use Viewer and StreamHost components. Record startup/version/PID, config loaded,
+settings saved, source start/reconnect, host-ready/PID, playback starting/started,
+error/ended/rejected, forced helper termination, shutdown/application failures, and
+Stopped. Never log camera URLs, credential-bearing arguments, or config values.
+Error records use exception type, HResult as 8 hex digits, and stack trace, OMITTING
+exception.Message since it may contain a URL/password. UI errors may still display it.
+
+Initialize logging before LibVLC/config parsing. Set WinForms unhandled-exception
+mode ThrowException, register AppDomain.UnhandledException to log/flush, catch top-level
+failures to log and show a native error MessageBox, and log Stopped plus
+LogManager.Shutdown() in finally.
+
+## 13. Four-part versions and GitHub release automation
+
+Share Directory.Build.props/targets between both executables. Current VersionPrefix
+is 1.0.2 and VersionRevisionOffset=21. Before GetAssemblyVersion calculate:
 
 ```text
-NO SIGNAL - Failed to connect
+revision = (git rev-list --count HEAD) - VersionRevisionOffset
+version = VersionPrefix + '.' + revision
 ```
 
-If a stream was live and later reconnect attempts fail, show:
+Snapshot commit count 23 gives 1.0.2.2. Each new commit increments fourth component;
+rebuilds/uncommitted edits do not. This is NOT a counter for each compiler invocation.
+Set Version, AssemblyVersion, FileVersion, InformationalVersion to the four-part
+value. SDK may append Git hash to product/informational version; file/assembly
+version and settings caption remain exactly four numeric components.
+
+Explicit -p:VersionRevision=N bypasses Git queries, supporting source archives;
+use N=2 for this snapshot. Otherwise require full history, reject shallow checkouts
+with fetch --unshallow/explicit-revision guidance, and validate revision integer
+0..65534. For a new three-part series set offset to the expected count of its .0
+commit. In a newly recreated repository lacking original history, align offset or
+initial override to produce 1.0.2.2, then retain commit-based increments; do not
+subtract 21 blindly from a new one-commit repository.
+
+Use GitHub Actions/GitHub Releases (the actual remote is GitHub, not GitLab).
+Workflow .github/workflows/build-windows.yml:
+
+- Every push to main and workflow_dispatch on main; not only version-tag pushes.
+- windows-latest, PowerShell, contents:write; queued windows-release concurrency
+  without cancelling earlier release runs.
+- actions/checkout@v4 fetch-depth:0; actions/setup-dotnet@v4 for 8.0.x.
+- Run node tests/release.test.cjs and dotnet run --project tests/LoggingRegression
+  --configuration Release before publishing.
+- Resolve version via dotnet msbuild CctvPip.App.csproj -nologo
+  -target:GetAssemblyVersion -getProperty:Version; validate four numeric components.
+- Restore BOTH projects explicitly: helper builds through MSBuild target, not a
+  ProjectReference, and otherwise its dependency restore can be missing in CI.
+- Build main Release; verify FileVersion of StreamPipViewer.dll and
+  StreamHost/CctvPip.StreamHost.dll equals the resolved version.
+- Reject packaging if output contains stream-pip.config or cctv-pip.properties.
+  Include default logging.config/dependencies but never local user config/log data.
+- ZIP name StreamPIPViewer-v<four-part-version>-windows.zip.
+- actions/github-script@v8 calls .github/scripts/release.cjs; release tag v<version>
+  targets workflow commit, title 'Stream PIP Viewer <version>', generated notes.
+
+Release script: validate version, ZIP name, and nonempty bytes before remote mutation.
+Create/reuse DRAFT release, replace matching draft assets, upload then publish.
+Do not mark an older replayed version latest if a newer stable version exists.
+On retry of a PUBLISHED release retain its existing nonempty uploaded ZIP; if it is
+missing, fail rather than replacing it or pruning old releases. Only after successful
+publication, list stable numeric-version releases, sort versions numerically, retain
+latest plus TWO previous (three total), and delete older release records/downloads.
+Keep Git tags permanently; exclude drafts/prereleases/nonnumeric tags from pruning.
+Build/upload failures never remove previous downloads. Add release summary link.
+
+## 14. Build outputs, resources, and repository hygiene
+
+Main build also builds helper and copies its entire output recursively into
+StreamHost beside the viewer, including native/managed dependencies and logging.config.
+Exclude CctvPip.StreamHost/**/*.cs and tests/**/*.cs from root compile globs to
+prevent duplicate entry points/generated attributes. Link AppIcon/AppLog/BudgetFileTarget
+and associated resources into helper without referencing the main WinExe assembly.
+
+Expected output (ordinary managed/native VLC dependencies abbreviated):
 
 ```text
-NO SIGNAL. Reconnection failed
+StreamPipViewer.exe
+StreamPipViewer.dll
+StreamPipViewer.deps.json
+StreamPipViewer.runtimeconfig.json
+NLog.dll
+logging.config
+stream-pip.config            (runtime-created/local, not a public release asset)
+logs/                        (runtime-created, never committed or packaged)
+StreamHost/
+  CctvPip.StreamHost.exe
+  CctvPip.StreamHost.dll
+  CctvPip.StreamHost.deps.json
+  CctvPip.StreamHost.runtimeconfig.json
+  NLog.dll
+  logging.config
+  ...native VLC and managed playback dependencies...
 ```
 
-Requirements:
+```powershell
+dotnet restore CctvPip.App.csproj
+dotnet restore CctvPip.StreamHost/CctvPip.StreamHost.csproj
+dotnet build CctvPip.App.csproj -c Release --no-restore
+.\bin\Release\net8.0-windows\StreamPipViewer.exe
+```
 
-- Show no-signal independently per stream.
-- Show no-signal in the main area if the main stream fails.
-- Show no-signal inside PIP if the PIP stream fails.
-- Include the stream label, such as `CCTV1` or `CCTV2`.
-- Include a short technical error reason when available.
+Require compatible Windows .NET desktop runtime/SDK. Normal releases are
+framework-dependent ZIPs, not installers or self-contained runtime bundles.
+On the original workstation's SDK workload-manifest access problem, set
+$env:MSBuildEnableWorkloadResolver='false' for build commands. This is an environment
+workaround, not an application feature. If a user app locks output, build elsewhere;
+do not kill it. The original copy target reads standard helper
+bin/<Configuration>/net8.0-windows output, so for custom OutputPath builds copy the
+ACTUAL matching helper output to StreamHost, avoiding stale Release binaries.
 
-## Reconnect
+Git ignores bin/, obj/, .vs/, *.user, cctv-pip.properties, stream-pip.config, logs/.
+Track default logging.config and the five required assets. Do not put private config
+in source/spec/tests/releases. Deliver full source and runnable output with both
+helpers' dependencies, and retain license/attribution in the project documentation.
 
-Implement independent reconnect logic for each stream:
+## 15. Acceptance and regression coverage
 
-- Default attempts: at least `3`.
-- Default delay: `1500` ms.
-- Reconnect must not freeze the UI.
-- One failed stream must not block the other.
-- Treat initial failure and failure after live playback differently.
-- Only consider reconnect successful when actual playback resumes, not merely when a play command is issued.
+Provide equivalent automated checks below on Windows without private camera access:
 
-## Error Reporting
+1. MouseHookRegression: exposed viewer/embedded cross-process child accepts clicks;
+   covering same/other-process windows reject; rejection clears double-click state;
+   queued actions cancel if covered; hidden/minimized/menu/settings guards; original
+   right-click coordinates preserved. Always pass input to the next hook.
+2. ReconnectRegression: first-item menu, main/PIP target before/after swap, stable
+   captured source while menu open, enabled state, real MainForm percentage bounds
+   at 4K/1080p/other sizes, real settings embedded toolbar resources.
+3. PipLayoutRegression: percentage examples, 0/100% margins, tiny/empty stage, scale
+   and border limits, no stored-position drift; one-time per-axis migration and all
+   duplicate pixel removal; non-finite values; invariant decimals; new/legacy filename
+   precedence; import/export/Save/Cancel with latest hidden disk values; hex/swatch
+   validation, numeric/slider synchronization, four-part status version. Render actual
+   settings to an image for layout verification.
+4. StreamHostWindowRegression: inspect initial/recreated/embedded extended styles;
+   hosted windows excluded from taskbar/Alt+Tab and standalone windows normal.
+5. LoggingRegression: startup cleanup, oldest-first deletion, names/UTF-8/safe error
+   metadata, 1 MiB rotation, separate severity config, malformed-config fallback,
+   unique sessions, shared initial log, live size checks with three concurrent writer
+   processes, locked-file skip/resume, no cap overshoot from app writes.
+6. tests/release.test.cjs: mocked API proves publish before pruning, numeric retention,
+   preserved tags/unrelated releases, draft recovery, published retry preservation,
+   missing/failed ZIP safety, and older reruns not becoming latest.
 
-Surface useful errors:
+```powershell
+dotnet run --project tests/MouseHookRegression
+dotnet run --project tests/ReconnectRegression
+dotnet run --project tests/PipLayoutRegression
+dotnet run --project tests/StreamHostWindowRegression
+dotnet run --project tests/LoggingRegression
+node tests/release.test.cjs
+```
 
-- Player/runtime not found.
-- Unsupported option.
-- RTSP timeout.
-- Authentication failure.
-- Stream not found.
-- Decoder/player failure.
-- Player rejected media item.
+Manual test with user-provided streams: native-quality two-feed playback, initially
+silent, independent audio, swap/reconnect preserving mute/source identity, settings
+preview/Save/Cancel behavior, proportional mixed-DPI PIP, covered-window input stays
+with covering app, no helper Alt+Tab previews, and no orphan hosts after closing.
+Use Appendix A icons exactly. Automated checks should not silently connect cameras.
 
-Do not silently hide all backend errors.
+## 16. Changes incorporated since a1779c8
 
-## Acceptance Criteria
+| Commit | Change incorporated |
+| --- | --- |
+| 1c4a3b3 | Original Windows release build workflow |
+| 002d3f7 | Explicit helper restore in CI |
+| 47cdd69 | Copyright website link |
+| e18bfbd | Covered-window/native mouse ancestry fix and regressions |
+| 70fc6d5 | Git-derived versions, main-push releases, safe retention/retries |
+| f34cffe | First-item context-sensitive Reconnect |
+| ead10fb | Percentage PIP, DPI handling, one-time migration |
+| e6c0f1d | Remove obsolete pixel keys after migration |
+| 9ee1316 | Hosted Alt+Tab suppression from handle creation |
+| 40435f3 | Native settings redesign/import/export/disk-preserving Save |
+| 1b875a7 | pip.ico for executables and all forms |
+| ca49bec | 1.0.2.0 series and commit-count offset 21 |
+| 22bd39d | StreamPipViewer identity, config migration, settings version |
+| 1cc68c3 | NLog/shared sessions/total byte retention and tests |
 
-- App launches and creates/loads config.
-- App starts with CCTV1 main and CCTV2 PIP.
-- Both streams start muted.
-- Both default URLs use `subtype=0`.
-- Main and PIP preserve aspect ratio.
-- PIP has visible border.
-- PIP is clamped within visible video area.
-- Right-click context menu works over live video.
-- Context menu order is Settings, separator, Mute All, Unmute All, separator, Unmute/Mute Main Stream, Unmute/Mute PIP Stream, separator, Swap feeds, Fullscreen/Exit Fullscreen.
-- `Mute All` mutes both streams.
-- `Unmute All` unmutes both streams.
-- Main stream mute toggle affects whichever stream is currently displayed as the main video.
-- PIP stream mute toggle affects whichever stream is currently displayed as the PIP video.
-- Per-stream mute state survives reconnects and stream restarts during the current session.
-- Double-click PIP swaps feeds.
-- Double-click main video toggles fullscreen.
-- `Esc` exits fullscreen.
-- Settings dialog is non-modal.
-- Settings can edit both source URLs.
-- Save commits settings to config.
-- Cancel discards settings.
-- Source URL changes reload streams after save.
-- No-signal states work independently.
-- Reconnect works independently.
-- CPU usage is materially lower than raw-frame/manual-painting approaches.
-- Video quality is close to a native RTSP/H.264 player.
-- If using an out-of-process stream host, building the main app also builds/copies the helper executable needed at runtime.
+## Appendix A. Exact binary icon assets
+
+Records below contain original tracked Base64 bytes, SHA-256, and byte count.
+Decode them; do not redraw or request missing icons. The README screenshot and
+unused icon_save16.png are not runtime resources and are not required here.
+
+Extract this file's asset records into a new project with PowerShell 7:
+
+```powershell
+$instructionText = [IO.File]::ReadAllText((Join-Path $PWD 'ai_gen_instructions.txt'))
+$assetPattern = '(?ms)^@@ASSET (?<path>assets/[A-Za-z0-9_-]+\.(?:ico|png)) (?<hash>[A-F0-9]{64}) (?<length>\d+)\r?\n(?<data>.*?)^@@ENDASSET\r?$'
+foreach ($assetMatch in [regex]::Matches($instructionText, $assetPattern)) {
+    $assetBytes = [Convert]::FromBase64String($assetMatch.Groups['data'].Value)
+    $assetHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($assetBytes))
+    if ($assetBytes.Length -ne [int]$assetMatch.Groups['length'].Value -or
+        $assetHash -ne $assetMatch.Groups['hash'].Value) { throw 'Asset checksum mismatch.' }
+    $assetDestination = Join-Path $PWD $assetMatch.Groups['path'].Value
+    [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($assetDestination)) | Out-Null
+    [IO.File]::WriteAllBytes($assetDestination, $assetBytes)
+}
+```
+
+For Windows PowerShell 5.1 replace HashData/ToHexString with
+SHA256.Create().ComputeHash and BitConverter.ToString(...).Replace('-','').
+
+@@ASSET assets/pip.ico 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
+@@ENDASSET
+
+@@ASSET assets/icon_open16.png 255233A8A8600D01B665B13D7EBC9F24A4CC430527044C60E768A5DD4955BAF0 503
+iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAA/FBMVEVHcEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB0VwAAAAB6XAAQDQAAAAAA
+AAAAAAAAAABEOwAYFQAAAABzbAAAAAAbFgBRRQBGPwCGfAAuKAAAAABzaAD/ywD/5gD/3QD/3gD/1ADOmgD/8AD/7QD+ywD6rgD9yACmkAD1uwD7rwDztAD0
+swD05wDWyQC2ogDytAD06AD2twCmkgCmkQD06gD3uADxswC+lwD9yQD06QD6rQDVqgDpwgD4uQD90gD+ygDvrwD+3QD05gDuqwD5qwD4ugCmjwCfiwD5uwC7
+kACffwCjjgCjlwCebACjggD4qgDCkgBBB7xrAAAAH3RSTlMAfhgeJWkIUSF2QPxZ/JEwbE0xxpkN9Ayh6sf9xBfzatf9bwAAAItJREFUGNOFz0UOAlEURNHC
+P+4ujbfg7tC4+/73Ah9C8ggDzuzWrID/3GbOYPx0PLocdhqVqkbP+QF2zr/UWm1F2YaDYKc0sWNgV4ETZXkwE8Xjc7jc1iOpKJWbXXWzP4QQu6/mvXqpkHsL
+IJH8EoE3RS18cEwzxMQF21gg+hbo7FnCqgU8JsL5+/UBWGkaTKuH6SgAAAAASUVORK5CYII=
+@@ENDASSET
+
+@@ASSET assets/icon_reload16.png 4DD824B075899462FAB22D4A4C92A7F34805F3CA1D208DBDFE830FC8EDBD0DCB 740
+iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAYBQTFRFR3BMAAAAAAAASowA
+AAAASIgAOWoAAAAAAAAATIsATI0ATY0AQHcAAAAAAAAASIkAPG8AR4gASosAAAAARoQAO24ASYgANmQAR4oATI0AAAAAAAAAR4kATY0AM2AARokAJkcASYwA
+SYwARokAR4kASIoAR4gAQ4cASYoAj7hC2eeHvtZLdKUnYJsARokA4eeZxNV6Q4gArMsaTIwARYcAiMUTp9wxtt5MxuFrndcASIgAoOIA0uGJSYwASosAfb8A
+RogAm8kAm9UAut5T1eajcqcirN4PnsMAlMEARYgAo9UAoNIAqt4QoNgAnNYAt+YxXJ0AmccAV5gA0eeCtNhRn9oAndgAXZwAcaYh0+h+n9kAptgPRocAYJ8A
+fawAn8MAdqwAncsAodsAkssAzeVnSowAqs07XpccttBL0+l/oMkAY6EAkskAo8YAhbFBv95LQIUAZJ0AYJ0Aoc4AqNAOTI0AzONnj8YAp88OS4wAj74Ajr4A
+W5cAQocA4eeYrcsbiLoFVgAAACR0Uk5TABYa+i7qhDMv8ehHmxUy+Yv4gxRqiPk8Z28JEOULc+VWqIP3CF7x0gAAAMpJREFUGNNjYAABJWXDWkM9RVkGKJDX
+MdCv0zfQ0ZOE8GU0tbSN6o20tTRVuEF8oYiyimrdGt2qkhRXZpCAYEh0eaWcAltpjpuzHUjAwT80lk1aSlhUQ0WDEySg5uMbLg6kednZ2TlAAipe3kUiQJrL
+Fmopv0dWWroEA4OnizpEgKcwNz4jL7Ugzt0GIsLEmlCcmJ8ZGRzoaKEKFmFhzU5Oigrzc7I0hwgwsAiIxQQF2FubmbBDzWXkA1ppZaoG40MApzEqn4EDzAcA
+sb8iyQjwU2QAAAAASUVORK5CYII=
+@@ENDASSET
+
+@@ASSET assets/icon_export16.png 4F3EDFD0503F4DD909B4028F1D42C8C6D1F2ED916E6218ED1C6E144FCF42EC30 641
+iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAATJQTFRFR3BMrK6urrCwS4ZH
+AAAArK+vrrCwAAAAr7GxsbOzAAAASX1HAAAAQn8+////q62tq66ura+v6urr+vX9N3g15+jorK6urbCw4uPk4+Tl9fX23t/h3t/g6enpSoRKoqWlpKamNncy
+S4RL6enq6+zu5ufn7/Dw8vLz7O3u8PHx7+/x9PP1+Pb6+Pj45efm6Ofnq66tysvL9fP3+Pf5+vv7+fX8gKd9//v/sLCy/P39+/r7u7W+/v7/vdWQN3g0QX89
+OXk3s8+DOHg2udOOSoRHSINGutOQwtmVp8lxOXk4utOPSINHu9SStNCDpMdsSYNIt7O6p8d3O3o6oMJtnMVjWZUCmMJbncJrk8JQTYZLk8ZPk8JTQX8/a6Ue
+h75CksVOg7s9hLs+TYZMTIVKhr1ApMd1uRc9tAAAAA50Uk5TAKbqqDCnrDPy7yPAKtvTxvYFAAAAy0lEQVQY02NgYOAUFxMQMBAQZGKAAkE+CJBlhAqI8clI
+S8vwyfPps0IEBPgkJCUl+BRM+GTZwAL8fKqionp8hgryfIJQAWUhISEpkDEWUAEVDS0jU2FhYT5rqICapo6Zop2IiIM9M0RAXdtc0dbZzcfL3QUiIGXMJ+LI
+FxzK5+sKEdC14nPyCOQL5/PzhrjD0obPMyQ2lY8vzB8kIA6yMCgaREbIgQQ4BAUEA2Li4xITUqIiQQIs7EDAm6wkJ6eUxA3zMQMPOxhwMQAAmsEZxiMT4MQA
+AAAASUVORK5CYII=
+@@ENDASSET
+
+@@ASSET assets/icon_import16.png 53702742CCC72CE246BC62A290BF3545AB75C628485A218655BC3C69029FCD99 647
+iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAThQTFRFR3BMrK6urrCwS4ZH
+rrCwAAAArK+vAAAAr7GxsbOzAAAASX1HQn8+AAAA////q62tq66ura+v6urr+vX95+jorK6urbCw4uPk9fX24+Tl3t/h3t/g6enppKamoqWlNncyNnczTYVL
+TIRL6enq6+zu5ufn7/Dw7O3u8vLz8PHx7+/x9PP1+Pb6+Pj4+Pf56Ofn5efmysvL9fP3//v/+vv7q66tsLCy+fX8gKd9/P39+/r7u7W+/v7/Nng0Nnc0vNWP
+OHk1QX89ttGJsM1/Nnc1s8+GtM+HuNKMocVoN3c2wtmVSoVHttGHYp0PSYNHSYRISoRJSoRKnsZkq8t2lcNUrM2BnMJpOno5lcBZt7O6nMtdkcFQQX8/ib5E
+osdztNOMTIRMS4RLir9HksVOib9Fib5FTIVKdK4sIQwT1gAAAA50Uk5TAKbqqKwwpzPy7yPA2yo80r+1AAAAy0lEQVQY02NgYOAUExUQMBUQZGKAAkE+CJBh
+hAqI8klLSUnzyfHps0EEBPjEJSXF+WRN+GRYwAL8fKoiIgZ8hrJyfIJQAWUhISEJkDFmUAEVdS0jc2FhYT5rqICapo6FvK2CgoMjM0RAQ9tY3t7J1c3dyxsi
+IKHHZ+cMMsPHDyKga8Xn4sHHF+Yb7A9xh6UNn2cEXxxfaFAASEAMpDg8mi89ni8kECTAISggGBmTnJKUGhulCBJgZQcCnjSlBKVERW6Yjxl42cGAiwEAnzYa
+YQRmNGgAAAAASUVORK5CYII=
+@@ENDASSET
