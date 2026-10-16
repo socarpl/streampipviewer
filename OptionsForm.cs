@@ -1,417 +1,394 @@
+﻿using System.Diagnostics;
+using System.Reflection;
+
 namespace CctvPip.App;
 
 internal sealed class OptionsForm : Form
 {
     private readonly AppConfig config;
-    private readonly Action swapStreams;
     private readonly Action<AppSettings> previewSettings;
     private readonly Action<AppSettings> saveSettings;
     private readonly Action cancelSettings;
-    private readonly Action openConfig;
     private readonly TextBox cctv1UrlTextBox = new();
     private readonly TextBox cctv2UrlTextBox = new();
     private readonly TrackBar pipScaleSlider = new();
+    private readonly NumericUpDown pipScaleInput = new();
+    private readonly TrackBar pipLeftSlider = new();
     private readonly NumericUpDown pipLeftInput = new();
+    private readonly TrackBar pipTopSlider = new();
     private readonly NumericUpDown pipTopInput = new();
-    private readonly NumericUpDown borderSizeInput = new();
+    private readonly TextBox borderColorTextBox = new();
     private readonly Button borderColorButton = new();
-    private readonly Label configPathLabel = new();
+    private readonly ToolStrip toolbar = new();
+    private readonly ToolStripStatusLabel configPathLabel = new();
+    private readonly List<Image> toolbarImages = new();
     private AppSettings draftSettings;
+    private string lastValidHex = "FFFFFF";
     private bool updatingControls;
     private bool closeHandled;
 
-    /// <summary>
-    /// Creates the non-modal settings dialog and wires callback actions used by the main form.
-    /// </summary>
-    /// <param name="initialSettings">The settings snapshot used to populate the initial dialog values.</param>
-    /// <param name="config">The application configuration, used here to display the active config path.</param>
-    /// <param name="swapStreams">The action that swaps MainWindow and PIP roles from the dialog.</param>
-    /// <param name="previewSettings">The action that previews draft layout settings in the main window.</param>
-    /// <param name="saveSettings">The action that persists confirmed settings.</param>
-    /// <param name="cancelSettings">The action that restores config-backed settings when changes are cancelled.</param>
-    /// <param name="openConfig">The action that opens the active configuration file.</param>
     public OptionsForm(
         AppSettings initialSettings,
         AppConfig config,
-        Action swapStreams,
         Action<AppSettings> previewSettings,
         Action<AppSettings> saveSettings,
-        Action cancelSettings,
-        Action openConfig)
+        Action cancelSettings)
     {
-        draftSettings = initialSettings;
         this.config = config;
-        this.swapStreams = swapStreams;
         this.previewSettings = previewSettings;
         this.saveSettings = saveSettings;
         this.cancelSettings = cancelSettings;
-        this.openConfig = openConfig;
+        draftSettings = initialSettings;
 
-        Text = "Stream PIP Viewer Settings";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
+        Text = "PIP Settings";
+        Font = SystemFonts.MessageBoxFont;
+        AutoScaleDimensions = new SizeF(96, 96);
+        AutoScaleMode = AutoScaleMode.Dpi;
+        ClientSize = new Size(760, 410);
+        MinimumSize = new Size(680, 420);
         ShowInTaskbar = false;
-        ClientSize = new Size(760, 318);
-        BackColor = Color.FromArgb(30, 30, 30);
-
         BuildControls();
-        RefreshFromSettings(draftSettings);
+        RefreshFromSettings(initialSettings);
     }
 
-    /// <summary>
-    /// Replaces the dialog draft settings and updates all controls without firing preview updates.
-    /// </summary>
-    /// <param name="settings">The settings snapshot that should be displayed by the dialog controls.</param>
     public void RefreshFromSettings(AppSettings settings)
     {
-        draftSettings = settings;
         updatingControls = true;
-        cctv1UrlTextBox.Text = draftSettings.Cctv1Url;
-        cctv2UrlTextBox.Text = draftSettings.Cctv2Url;
-        pipScaleSlider.Value = Math.Clamp((int)Math.Round(draftSettings.PipScale * 100), pipScaleSlider.Minimum, pipScaleSlider.Maximum);
-        pipLeftInput.Value = (decimal)Math.Clamp(draftSettings.PipLeftPercent, 0, 100);
-        pipTopInput.Value = (decimal)Math.Clamp(draftSettings.PipTopPercent, 0, 100);
-        borderSizeInput.Value = Math.Clamp(draftSettings.PipBorderSize, (int)borderSizeInput.Minimum, (int)borderSizeInput.Maximum);
-        borderColorButton.BackColor = draftSettings.PipBorderColor;
-        borderColorButton.ForeColor = GetReadableTextColor(draftSettings.PipBorderColor);
-        updatingControls = false;
+        try
+        {
+            draftSettings = settings;
+            cctv1UrlTextBox.Text = settings.Cctv1Url;
+            cctv2UrlTextBox.Text = settings.Cctv2Url;
+            pipScaleInput.Value = PercentValue(settings.PipScale * 100);
+            pipLeftInput.Value = PercentValue(settings.PipLeftPercent);
+            pipTopInput.Value = PercentValue(settings.PipTopPercent);
+            pipScaleSlider.Value = SliderValue(pipScaleInput);
+            pipLeftSlider.Value = SliderValue(pipLeftInput);
+            pipTopSlider.Value = SliderValue(pipTopInput);
+            lastValidHex = SettingsFileOperations.HexColor(settings.PipBorderColor);
+            borderColorTextBox.Text = lastValidHex;
+            borderColorButton.BackColor = settings.PipBorderColor;
+            draftSettings = ReadControls();
+        }
+        finally { updatingControls = false; }
     }
 
-    /// <summary>
-    /// Treats closing the dialog without an explicit save as a cancel operation.
-    /// </summary>
-    /// <param name="e">The WinForms close event arguments.</param>
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (!closeHandled)
         {
-            closeHandled = true;
             cancelSettings();
+            closeHandled = true;
         }
-
         base.OnFormClosing(e);
     }
 
-    /// <summary>
-    /// Creates and arranges all settings controls, labels, buttons, and event handlers.
-    /// </summary>
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            foreach (var image in toolbarImages) image.Dispose();
+            toolbarImages.Clear();
+        }
+        base.Dispose(disposing);
+    }
+
     private void BuildControls()
     {
-        var root = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 5,
-            Padding = new Padding(14),
-            BackColor = Color.Transparent
-        };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        SuspendLayout();
+        toolbar.GripStyle = ToolStripGripStyle.Visible;
+        toolbar.RenderMode = ToolStripRenderMode.System;
+        toolbar.ImageScalingSize = new Size(16, 16);
+        toolbar.Items.Add(ToolbarButton("icon_open16.png", "Open containing folder", OpenContainingFolder));
+        toolbar.Items.Add(ToolbarButton("icon_reload16.png", "Reload from disk", ReloadFromDisk));
+        toolbar.Items.Add(ToolbarButton("icon_export16.png", "Export settings to file", ExportSettings));
+        toolbar.Items.Add(ToolbarButton("icon_import16.png", "Import settings from file", ImportSettings));
+        toolbar.Dock = DockStyle.Top;
 
-        var sourceGrid = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 2,
-            BackColor = Color.Transparent
-        };
-        sourceGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+        var sources = new GroupBox { Text = "Video Sources", Dock = DockStyle.Fill, Padding = new Padding(12, 8, 12, 8), Margin = Padding.Empty };
+        var sourceGrid = Grid(2, 2);
+        sourceGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60));
         sourceGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        sourceGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        sourceGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-
-        ConfigureSourceTextBox(cctv1UrlTextBox);
-        ConfigureSourceTextBox(cctv2UrlTextBox);
-        cctv1UrlTextBox.TextChanged += (_, _) => UpdateSourceDraft();
-        cctv2UrlTextBox.TextChanged += (_, _) => UpdateSourceDraft();
-        sourceGrid.Controls.Add(CreateCaption("CCTV1"), 0, 0);
+        sourceGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        sourceGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        foreach (var textBox in new[] { cctv1UrlTextBox, cctv2UrlTextBox })
+        {
+            textBox.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            textBox.Margin = new Padding(0, 3, 4, 3);
+            textBox.TextChanged += (_, _) => UpdateDraft();
+        }
+        sourceGrid.Controls.Add(Caption("Source 1"), 0, 0);
         sourceGrid.Controls.Add(cctv1UrlTextBox, 1, 0);
-        sourceGrid.Controls.Add(CreateCaption("CCTV2"), 0, 1);
+        sourceGrid.Controls.Add(Caption("Source 2"), 0, 1);
         sourceGrid.Controls.Add(cctv2UrlTextBox, 1, 1);
+        sources.Controls.Add(sourceGrid);
 
-        var pipRow = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            BackColor = Color.Transparent
-        };
+        ConfigurePercentage(pipScaleInput, pipScaleSlider);
+        ConfigurePercentage(pipLeftInput, pipLeftSlider);
+        ConfigurePercentage(pipTopInput, pipTopSlider);
+        var sizeGroup = new GroupBox { Text = "PIP Size && Border", Dock = DockStyle.Fill, Margin = new Padding(0, 0, 10, 0), Padding = new Padding(12, 8, 12, 8) };
+        var sizeContents = Grid(1, 2);
+        sizeContents.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        sizeContents.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        sizeContents.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+        sizeContents.Controls.Add(PercentageRow("Size", pipScaleSlider, pipScaleInput), 0, 0);
 
-        pipScaleSlider.Minimum = 10;
-        pipScaleSlider.Maximum = 60;
-        pipScaleSlider.TickFrequency = 5;
-        pipScaleSlider.Width = 150;
-        pipScaleSlider.Scroll += (_, _) =>
-        {
-            if (updatingControls)
-            {
-                return;
-            }
-
-            draftSettings = draftSettings with { PipScale = pipScaleSlider.Value / 100.0 };
-            previewSettings(draftSettings);
-        };
-
-        ConfigureNumberInput(pipLeftInput);
-        ConfigureNumberInput(pipTopInput);
-        ConfigureBorderSizeInput(borderSizeInput);
-        pipLeftInput.ValueChanged += (_, _) => UpdatePipPosition();
-        pipTopInput.ValueChanged += (_, _) => UpdatePipPosition();
-        borderSizeInput.ValueChanged += (_, _) => UpdateBorderSize();
-
-        pipRow.Controls.Add(CreatePipCaption("PIP Size"));
-        pipRow.Controls.Add(pipScaleSlider);
-        pipRow.Controls.Add(CreatePipCaption("Left (%)"));
-        pipRow.Controls.Add(pipLeftInput);
-        pipRow.Controls.Add(CreatePipCaption("Top (%)"));
-        pipRow.Controls.Add(pipTopInput);
-        pipRow.Controls.Add(CreatePipCaption("Border"));
-        pipRow.Controls.Add(borderSizeInput);
-
-        var actionRow = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            BackColor = Color.Transparent
-        };
-
-        var swapButton = CreateButton("Swap Streams");
-        swapButton.Click += (_, _) => swapStreams();
-
-        var openConfigButton = CreateButton("Open Config");
-        openConfigButton.Click += (_, _) => openConfig();
-
-        borderColorButton.Text = "Border Color";
-        borderColorButton.AutoSize = true;
-        borderColorButton.Height = 32;
-        borderColorButton.Margin = new Padding(0, 4, 8, 4);
+        var colorRow = Grid(3, 1);
+        colorRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
+        colorRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        colorRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34));
+        colorRow.Controls.Add(Caption("Border color"), 0, 0);
+        borderColorTextBox.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        borderColorTextBox.TextAlign = HorizontalAlignment.Center;
+        borderColorTextBox.MaxLength = 7;
+        borderColorTextBox.Margin = new Padding(0, 3, 6, 3);
+        borderColorTextBox.TextChanged += (_, _) => UpdateBorderColor();
+        borderColorTextBox.Leave += (_, _) => CommitColorText();
+        colorRow.Controls.Add(borderColorTextBox, 1, 0);
+        borderColorButton.Size = new Size(28, 23);
+        borderColorButton.Anchor = AnchorStyles.Left;
+        borderColorButton.Margin = new Padding(2, 3, 0, 3);
+        borderColorButton.UseVisualStyleBackColor = false;
+        borderColorButton.AccessibleName = "Choose border color";
         borderColorButton.Click += (_, _) => PickBorderColor();
+        colorRow.Controls.Add(borderColorButton, 2, 0);
+        sizeContents.Controls.Add(colorRow, 0, 1);
+        sizeGroup.Controls.Add(sizeContents);
 
-        actionRow.Controls.Add(swapButton);
-        actionRow.Controls.Add(borderColorButton);
-        actionRow.Controls.Add(openConfigButton);
+        var positionGroup = new GroupBox { Text = "PIP Position", Dock = DockStyle.Fill, Margin = new Padding(10, 0, 0, 0), Padding = new Padding(12, 8, 12, 8) };
+        var positionContents = Grid(1, 3);
+        positionContents.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        positionContents.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        positionContents.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        positionContents.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        positionContents.Controls.Add(Caption("Margin size from..."), 0, 0);
+        positionContents.Controls.Add(PercentageRow("Left", pipLeftSlider, pipLeftInput), 0, 1);
+        positionContents.Controls.Add(PercentageRow("Top", pipTopSlider, pipTopInput), 0, 2);
+        positionGroup.Controls.Add(positionContents);
 
-        var saveRow = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            BackColor = Color.Transparent
-        };
+        var groups = Grid(2, 1);
+        groups.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        groups.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        groups.Controls.Add(sizeGroup, 0, 0);
+        groups.Controls.Add(positionGroup, 1, 0);
 
-        var saveButton = CreateButton("Save");
+        var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Margin = Padding.Empty };
+        var saveButton = new Button { Text = "Save", Size = new Size(75, 25), Margin = new Padding(4, 4, 0, 0) };
+        var cancelButton = new Button { Text = "Cancel", Size = new Size(75, 25), Margin = new Padding(4, 4, 4, 0), CausesValidation = false };
         saveButton.Click += (_, _) => SaveAndClose();
-
-        var cancelButton = CreateButton("Cancel");
         cancelButton.Click += (_, _) => CancelAndClose();
+        buttons.Controls.Add(saveButton);
+        buttons.Controls.Add(cancelButton);
+        AcceptButton = saveButton;
+        CancelButton = cancelButton;
 
-        saveRow.Controls.Add(saveButton);
-        saveRow.Controls.Add(cancelButton);
+        var body = Grid(1, 5);
+        body.Padding = new Padding(20);
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 18));
+        body.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 14));
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        body.Controls.Add(sources, 0, 0);
+        body.Controls.Add(groups, 0, 2);
+        body.Controls.Add(buttons, 0, 4);
 
-        configPathLabel.Dock = DockStyle.Fill;
-        configPathLabel.AutoEllipsis = true;
-        configPathLabel.ForeColor = Color.Silver;
-        configPathLabel.TextAlign = ContentAlignment.MiddleLeft;
+        var statusBar = new StatusStrip { SizingGrip = true, Dock = DockStyle.Bottom };
         configPathLabel.Text = config.Path;
-
-        root.Controls.Add(sourceGrid, 0, 0);
-        root.Controls.Add(pipRow, 0, 1);
-        root.Controls.Add(actionRow, 0, 2);
-        root.Controls.Add(saveRow, 0, 3);
-        root.Controls.Add(configPathLabel, 0, 4);
-        Controls.Add(root);
+        configPathLabel.ToolTipText = config.Path;
+        configPathLabel.IsLink = true;
+        configPathLabel.Spring = true;
+        configPathLabel.TextAlign = ContentAlignment.MiddleLeft;
+        configPathLabel.Click += (_, _) => RunFileAction(config.OpenInNotepad);
+        statusBar.Items.Add(configPathLabel);
+        Controls.Add(body);
+        Controls.Add(toolbar);
+        Controls.Add(statusBar);
+        ResumeLayout(true);
     }
 
-    /// <summary>
-    /// Applies standard layout settings to a stream URL text box.
-    /// </summary>
-    /// <param name="textBox">The text box to configure.</param>
-    private static void ConfigureSourceTextBox(TextBox textBox)
+    private ToolStripButton ToolbarButton(string resourceName, string tooltip, Action action)
     {
-        textBox.Dock = DockStyle.Fill;
-        textBox.Margin = new Padding(4, 4, 0, 4);
-    }
-
-    /// <summary>
-    /// Creates a standard dialog button with consistent sizing and margins.
-    /// </summary>
-    /// <param name="text">The button text to display.</param>
-    /// <returns>A configured button instance.</returns>
-    private static Button CreateButton(string text)
-    {
-        return new Button
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("CctvPip.App.assets." + resourceName)
+            ?? throw new InvalidOperationException("Missing toolbar icon: " + resourceName);
+        using var original = Image.FromStream(stream);
+        var image = new Bitmap(original);
+        toolbarImages.Add(image);
+        var button = new ToolStripButton
         {
-            Text = text,
-            AutoSize = true,
-            Height = 32,
-            Margin = new Padding(0, 4, 8, 4)
+            Image = image, DisplayStyle = ToolStripItemDisplayStyle.Image,
+            Text = tooltip, ToolTipText = tooltip, AccessibleName = tooltip,
+            ImageScaling = ToolStripItemImageScaling.None
         };
+        button.Click += (_, _) => RunFileAction(action);
+        return button;
     }
 
-    /// <summary>
-    /// Creates a left-aligned caption label for source URL rows.
-    /// </summary>
-    /// <param name="text">The caption text to display.</param>
-    /// <returns>A configured label instance.</returns>
-    private static Label CreateCaption(string text)
+    private static TableLayoutPanel Grid(int columns, int rows) =>
+        new() { Dock = DockStyle.Fill, ColumnCount = columns, RowCount = rows, Margin = Padding.Empty };
+
+    private static Label Caption(string text) =>
+        new() { Text = text, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty, AutoSize = true };
+
+    private static TableLayoutPanel PercentageRow(string caption, TrackBar slider, NumericUpDown input)
     {
-        return new Label
-        {
-            Text = text,
-            Dock = DockStyle.Fill,
-            ForeColor = Color.White,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Margin = new Padding(0, 4, 4, 4)
-        };
+        var row = Grid(4, 1);
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 58));
+        row.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 20));
+        row.Controls.Add(Caption(caption), 0, 0);
+        row.Controls.Add(slider, 1, 0);
+        row.Controls.Add(input, 2, 0);
+        row.Controls.Add(Caption("%"), 3, 0);
+        return row;
     }
 
-    /// <summary>
-    /// Creates a compact caption label for controls in the PIP settings row.
-    /// </summary>
-    /// <param name="text">The caption text to display.</param>
-    /// <returns>A configured label instance.</returns>
-    private static Label CreatePipCaption(string text)
+    private void ConfigurePercentage(NumericUpDown input, TrackBar slider)
     {
-        return new Label
-        {
-            Text = text,
-            AutoSize = true,
-            ForeColor = Color.White,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Margin = new Padding(10, 17, 4, 0)
-        };
-    }
-
-    /// <summary>
-    /// Configures a percentage offset from the main video area's left or top edge.
-    /// </summary>
-    /// <param name="input">The numeric input control to configure.</param>
-    private static void ConfigureNumberInput(NumericUpDown input)
-    {
-        input.Minimum = 0;
-        input.Maximum = 100;
-        input.Width = 78;
+        input.Minimum = slider.Minimum = 0;
+        input.Maximum = slider.Maximum = 100;
         input.DecimalPlaces = 2;
         input.Increment = 0.1M;
+        input.Anchor = AnchorStyles.Left | AnchorStyles.Right;
         input.TextAlign = HorizontalAlignment.Right;
-        input.Margin = new Padding(0, 12, 0, 0);
-    }
-
-    /// <summary>
-    /// Applies range, alignment, and spacing settings to the PIP border-size input.
-    /// </summary>
-    /// <param name="input">The numeric input control to configure for border size in pixels.</param>
-    private static void ConfigureBorderSizeInput(NumericUpDown input)
-    {
-        input.Minimum = 0;
-        input.Maximum = 100;
-        input.Width = 64;
-        input.Increment = 1;
-        input.TextAlign = HorizontalAlignment.Right;
-        input.Margin = new Padding(0, 12, 0, 0);
-    }
-
-    /// <summary>
-    /// Copies PIP percentage offsets into the draft settings and previews the layout.
-    /// </summary>
-    private void UpdatePipPosition()
-    {
-        if (updatingControls)
+        input.Margin = new Padding(3, 3, 6, 3);
+        slider.Dock = DockStyle.Fill;
+        slider.AutoSize = false;
+        slider.TickFrequency = 10;
+        slider.TickStyle = TickStyle.Both;
+        slider.Margin = new Padding(0, 3, 3, 3);
+        input.ValueChanged += (_, _) =>
         {
-            return;
-        }
-
-        draftSettings = draftSettings with
-        {
-            PipLeftPercent = (double)pipLeftInput.Value,
-            PipTopPercent = (double)pipTopInput.Value
+            if (updatingControls) return;
+            updatingControls = true;
+            try { slider.Value = SliderValue(input); }
+            finally { updatingControls = false; }
+            UpdateDraft();
         };
-        previewSettings(draftSettings);
-    }
-
-    /// <summary>
-    /// Copies the PIP border-size input value into the draft settings and previews the layout.
-    /// </summary>
-    private void UpdateBorderSize()
-    {
-        if (updatingControls)
+        slider.ValueChanged += (_, _) =>
         {
-            return;
-        }
-
-        draftSettings = draftSettings with { PipBorderSize = (int)borderSizeInput.Value };
-        previewSettings(draftSettings);
-    }
-
-    /// <summary>
-    /// Copies stream URL text box values into the draft settings and previews the current draft.
-    /// </summary>
-    private void UpdateSourceDraft()
-    {
-        if (updatingControls)
-        {
-            return;
-        }
-
-        draftSettings = draftSettings with
-        {
-            Cctv1Url = cctv1UrlTextBox.Text.Trim(),
-            Cctv2Url = cctv2UrlTextBox.Text.Trim()
+            if (updatingControls) return;
+            updatingControls = true;
+            try { input.Value = slider.Value; }
+            finally { updatingControls = false; }
+            UpdateDraft();
         };
+    }
+
+    private static decimal PercentValue(double value) =>
+        Math.Round((decimal)(double.IsFinite(value) ? Math.Clamp(value, 0, 100) : 0), 2);
+
+    private static int SliderValue(NumericUpDown input) => (int)Math.Round(input.Value, MidpointRounding.AwayFromZero);
+
+    private AppSettings ReadControls() => draftSettings with
+    {
+        Cctv1Url = cctv1UrlTextBox.Text.Trim(),
+        Cctv2Url = cctv2UrlTextBox.Text.Trim(),
+        PipScale = (double)pipScaleInput.Value / 100,
+        PipLeftPercent = (double)pipLeftInput.Value,
+        PipTopPercent = (double)pipTopInput.Value
+    };
+
+    private void UpdateDraft()
+    {
+        if (updatingControls) return;
+        draftSettings = ReadControls();
         previewSettings(draftSettings);
     }
 
-    /// <summary>
-    /// Opens a color picker, stores the selected PIP border color, refreshes controls, and previews the change.
-    /// </summary>
+    private void UpdateBorderColor()
+    {
+        if (updatingControls || !SettingsFileOperations.TryParseHexColor(borderColorTextBox.Text, out var color)) return;
+        lastValidHex = SettingsFileOperations.HexColor(color);
+        borderColorButton.BackColor = color;
+        draftSettings = draftSettings with { PipBorderColor = color };
+        UpdateDraft();
+    }
+
+    private void CommitColorText()
+    {
+        if (SettingsFileOperations.TryParseHexColor(borderColorTextBox.Text, out _)) UpdateBorderColor();
+        borderColorTextBox.Text = lastValidHex;
+    }
+
     private void PickBorderColor()
     {
-        using var dialog = new ColorDialog
+        CommitColorText();
+        using var dialog = new ColorDialog { Color = draftSettings.PipBorderColor, FullOpen = true };
+        if (dialog.ShowDialog(this) == DialogResult.OK)
         {
-            Color = draftSettings.PipBorderColor,
-            FullOpen = true
-        };
-
-        if (dialog.ShowDialog(this) != DialogResult.OK)
-        {
-            return;
+            borderColorTextBox.Text = SettingsFileOperations.HexColor(dialog.Color);
         }
+    }
 
-        draftSettings = draftSettings with { PipBorderColor = dialog.Color };
-        RefreshFromSettings(draftSettings);
+    private void ReloadFromDisk()
+    {
+        var settings = SettingsFileOperations.ReadVisibleSettings(config.Path, AppSettings.FromConfig(config));
+        RefreshFromSettings(settings);
         previewSettings(draftSettings);
     }
 
-    /// <summary>
-    /// Validates source URLs, passes confirmed settings to the main form, and closes the dialog.
-    /// </summary>
+    private void ImportFromFile(string path)
+    {
+        var settings = SettingsFileOperations.ReadVisibleSettings(path, ReadControls());
+        RefreshFromSettings(settings);
+        previewSettings(draftSettings);
+    }
+
+    private void ExportToFile(string path)
+    {
+        CommitColorText();
+        draftSettings = ReadControls();
+        SettingsFileOperations.Export(config.Path, path, draftSettings);
+    }
+
+    private void ImportSettings()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Import settings from file", Filter = "Properties files (*.properties)|*.properties",
+            DefaultExt = "properties", CheckFileExists = true, Multiselect = false,
+            InitialDirectory = Path.GetDirectoryName(config.Path)
+        };
+        if (dialog.ShowDialog(this) == DialogResult.OK) ImportFromFile(dialog.FileName);
+    }
+
+    private void ExportSettings()
+    {
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Export settings to file", Filter = "Properties files (*.properties)|*.properties",
+            DefaultExt = "properties", AddExtension = true, OverwritePrompt = true,
+            FileName = Path.GetFileNameWithoutExtension(config.Path) + "-backup.properties",
+            InitialDirectory = Path.GetDirectoryName(config.Path)
+        };
+        if (dialog.ShowDialog(this) == DialogResult.OK) ExportToFile(dialog.FileName);
+    }
+
+    private void OpenContainingFolder()
+    {
+        var startInfo = new ProcessStartInfo("explorer.exe") { UseShellExecute = true };
+        startInfo.ArgumentList.Add(Path.GetDirectoryName(config.Path)!);
+        using var _ = Process.Start(startInfo);
+    }
+
     private void SaveAndClose()
     {
-        draftSettings = draftSettings with
-        {
-            Cctv1Url = cctv1UrlTextBox.Text.Trim(),
-            Cctv2Url = cctv2UrlTextBox.Text.Trim()
-        };
-
+        CommitColorText();
+        draftSettings = ReadControls();
         if (string.IsNullOrWhiteSpace(draftSettings.Cctv1Url) || string.IsNullOrWhiteSpace(draftSettings.Cctv2Url))
         {
-            MessageBox.Show(this, "Both CCTV source URLs must be filled in.", "Invalid Source", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, "Both source URLs must be filled in.", "Invalid Source", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-
+        try { saveSettings(draftSettings); }
+        catch (Exception ex) { ShowError(ex); return; }
         closeHandled = true;
-        saveSettings(draftSettings);
         Close();
     }
 
-    /// <summary>
-    /// Cancels draft settings, restores the main form's config-backed settings, and closes the dialog.
-    /// </summary>
     private void CancelAndClose()
     {
         closeHandled = true;
@@ -419,14 +396,12 @@ internal sealed class OptionsForm : Form
         Close();
     }
 
-    /// <summary>
-    /// Chooses black or white foreground text for readable contrast against a background color.
-    /// </summary>
-    /// <param name="background">The background color to evaluate.</param>
-    /// <returns>Black text for bright backgrounds, otherwise white text.</returns>
-    private static Color GetReadableTextColor(Color background)
+    private void RunFileAction(Action action)
     {
-        var luminance = (0.299 * background.R + 0.587 * background.G + 0.114 * background.B) / 255;
-        return luminance > 0.55 ? Color.Black : Color.White;
+        try { action(); }
+        catch (Exception ex) { ShowError(ex); }
     }
+
+    private void ShowError(Exception ex) =>
+        MessageBox.Show(this, ex.Message, "PIP Settings", MessageBoxButtons.OK, MessageBoxIcon.Error);
 }

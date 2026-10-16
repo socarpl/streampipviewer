@@ -322,11 +322,9 @@ internal sealed class MainForm : Form
             optionsForm = new OptionsForm(
                 currentSettings,
                 config,
-                SwapStreams,
                 PreviewSettings,
                 SaveSettings,
-                CancelSettings,
-                OpenConfig);
+                CancelSettings);
             optionsForm.StartPosition = FormStartPosition.Manual;
             optionsForm.Location = new Point(
                 Math.Min(Right - optionsForm.Width, Screen.FromControl(this).WorkingArea.Right - optionsForm.Width),
@@ -367,8 +365,8 @@ internal sealed class MainForm : Form
     private void SaveSettings(AppSettings settings)
     {
         var oldSettings = AppSettings.FromConfig(config);
-        currentSettings = settings;
         config.ApplySettings(settings);
+        currentSettings = AppSettings.FromConfig(config);
         ApplyLayout();
 
         if (!StringComparer.Ordinal.Equals(oldSettings.Cctv1Url, settings.Cctv1Url) ||
@@ -447,21 +445,6 @@ internal sealed class MainForm : Form
         MinimumSize = new Size(960, 620);
         ResumeLayout();
         ApplyLayout();
-    }
-
-    /// <summary>
-    /// Opens the active configuration file and reports failures in a message box.
-    /// </summary>
-    private void OpenConfig()
-    {
-        try
-        {
-            config.OpenInDefaultEditor();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "Open Config Failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
     }
 
     /// <summary>

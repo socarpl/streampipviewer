@@ -74,6 +74,11 @@ internal static class Program
                     $"Real form keeps PIP at 70% / 4% when resized to {size.Width} by {size.Height}");
             }
             Check(ReferenceEquals(originalSettings, Field(form, "currentSettings")), "Resizing does not overwrite the requested position");
+            Call(form, "ShowOptions");
+            var options = (Form)Field(form, "optionsForm")!;
+            Check(options.Text == "PIP Settings" && options.Controls.OfType<ToolStrip>().Any(),
+                "Production settings dialog opens with its embedded toolbar resources");
+            options.Close();
             Console.WriteLine("All reconnect-target regression checks passed.");
             return 0;
         }

@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Remove="CctvPip.StreamHost\**\*.cs" />
     <Compile Remove="tests\**\*.cs" />
+    <EmbeddedResource Include="assets\icon_open16.png;assets\icon_reload16.png;assets\icon_export16.png;assets\icon_import16.png" />
   </ItemGroup>
 
   <ItemGroup>

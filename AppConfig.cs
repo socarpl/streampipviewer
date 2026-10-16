@@ -7,7 +7,7 @@ internal sealed class AppConfig : IDisposable
 {
     public const string FileName = "cctv-pip.properties";
 
-    private readonly PropertiesFile properties;
+    private PropertiesFile properties;
 
     /// <summary>
     /// Creates an application configuration wrapper around a loaded properties file, ensures missing defaults, and saves the result.
@@ -162,19 +162,14 @@ internal sealed class AppConfig : IDisposable
     }
 
     /// <summary>
-    /// Applies a settings snapshot to the backing properties file and persists the combined changes once.
+    /// Saves dialog settings while preserving the latest disk values for settings without controls.
     /// </summary>
     /// <param name="settings">The settings selected in the options dialog.</param>
     public void ApplySettings(AppSettings settings)
     {
-        SetWithoutSave("cctv1.url", settings.Cctv1Url);
-        SetWithoutSave("cctv2.url", settings.Cctv2Url);
-        SetWithoutSave("pip.border.color", ColorTranslator.ToHtml(settings.PipBorderColor));
-        SetWithoutSave("pip.border.size", Math.Clamp(settings.PipBorderSize, 0, 100).ToString(CultureInfo.InvariantCulture));
-        SetWithoutSave("pip.left.percent", Math.Clamp(settings.PipLeftPercent, 0, 100).ToString("0.###", CultureInfo.InvariantCulture));
-        SetWithoutSave("pip.top.percent", Math.Clamp(settings.PipTopPercent, 0, 100).ToString("0.###", CultureInfo.InvariantCulture));
-        SetWithoutSave("pip.scale", settings.PipScale.ToString("0.###", CultureInfo.InvariantCulture));
-        Save();
+        var updated = SettingsFileOperations.MergeVisibleSettings(Path, settings);
+        updated.Save(Path);
+        properties = updated;
     }
 
     /// <summary>
@@ -186,18 +181,20 @@ internal sealed class AppConfig : IDisposable
     }
 
     /// <summary>
-    /// Opens the active configuration file in the operating system's default editor.
+    /// Opens the active configuration file in Notepad.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when the operating system cannot launch the editor for the config file.</exception>
-    public void OpenInDefaultEditor()
+    public void OpenInNotepad()
     {
         try
         {
-            using var _ = Process.Start(new ProcessStartInfo
+            var startInfo = new ProcessStartInfo
             {
-                FileName = Path,
+                FileName = "notepad.exe",
                 UseShellExecute = true
-            });
+            };
+            startInfo.ArgumentList.Add(Path);
+            using var _ = Process.Start(startInfo);
         }
         catch (Exception ex)
         {
@@ -206,11 +203,10 @@ internal sealed class AppConfig : IDisposable
     }
 
     /// <summary>
-    /// Persists any pending configuration values before releasing this configuration instance.
+    /// Settings are saved explicitly; closing the app must not overwrite external file edits.
     /// </summary>
     public void Dispose()
     {
-        Save();
     }
 
     /// <summary>

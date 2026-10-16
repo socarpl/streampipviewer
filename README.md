@@ -86,19 +86,28 @@ Other controls:
 
 ## Settings
 
-Open `Settings` from the context menu.
+Open `Settings` from the context menu. The dialog uses the Windows system colors.
 
 Available settings:
 
 - CCTV1 source URL.
 - CCTV2 source URL.
-- PIP size.
+- PIP size with synchronized slider and percentage input.
 - PIP left margin as a percentage of the main video width.
 - PIP top margin as a percentage of the main video height.
-- PIP border color.
-- PIP border size from 0 to 100 px.
-- Swap streams.
-- Open active config file.
+- PIP border color as a six-digit RGB hex value, a color swatch, and a color picker.
+
+The toolbar provides, from left to right:
+
+- Open the folder containing the active properties file.
+- Reload dialog values from the current file on disk.
+- Export a backup `.properties` file using the values currently displayed. Other
+  settings and comments come from the latest active file on disk.
+- Import dialog values from another `.properties` file. Missing values keep their
+  current control values; settings without controls are ignored.
+
+The file path in the bottom status bar opens the active file in Notepad when clicked.
+Border thickness remains configurable through `pip.border.size` in the properties file.
 
 Settings behavior:
 
@@ -106,6 +115,11 @@ Settings behavior:
 - Source URL and setting changes are written to config only after clicking `Save`.
 - `Cancel` restores the config-backed view and does not write changes.
 - If either source URL changes on `Save`, both streams reload.
+- Import and reload update controls and previews without writing the active file.
+- Export never replaces the active configuration. Save preserves settings without
+  controls, including any changes to them made on disk while the dialog was open.
+- Valid RGB hex text updates the swatch immediately. Invalid text reverts to the
+  last valid color when focus leaves the field.
 
 PIP position uses the top-left corner of the main video area as its origin, excluding
 black letterbox bars. `Left (%) = 10` and `Top (%) = 10` place PIP at `(100, 50)` in a

@@ -12,5 +12,8 @@
     <Compile Include="..\..\AppConfig.cs" Link="AppConfig.cs" />
     <Compile Include="..\..\PropertiesFile.cs" Link="PropertiesFile.cs" />
     <Compile Include="..\..\OptionsForm.cs" Link="OptionsForm.cs" />
+    <Compile Include="..\..\SettingsFileOperations.cs" Link="SettingsFileOperations.cs" />
+    <EmbeddedResource Include="..\..\assets\icon_open16.png;..\..\assets\icon_reload16.png;..\..\assets\icon_export16.png;..\..\assets\icon_import16.png"
+                      LogicalName="CctvPip.App.assets.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

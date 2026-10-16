@@ -10,6 +10,8 @@ internal static class Program
     private static int Main()
     {
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
         var directory = Path.Combine(AppContext.BaseDirectory, "test-data");
         Directory.CreateDirectory(directory);
         try
@@ -17,6 +19,7 @@ internal static class Program
             TestLayout();
             TestConfiguration(directory);
             TestOptions(directory);
+            TestSettingsFiles(directory);
             Console.WriteLine("All percentage PIP regression checks passed.");
             return 0;
         }
@@ -111,13 +114,41 @@ internal static class Program
         var initialFile = File.ReadAllText(config.Path);
         AppSettings? preview = null;
         var cancelled = false;
-        using (var options = new OptionsForm(AppSettings.FromConfig(config), config, () => {},
-            settings => preview = settings, config.ApplySettings, () => cancelled = true, () => {}))
+        using (var options = new OptionsForm(AppSettings.FromConfig(config), config,
+            settings => preview = settings, config.ApplySettings, () => cancelled = true))
         {
             var left = (NumericUpDown)Field(options, "pipLeftInput")!;
             var top = (NumericUpDown)Field(options, "pipTopInput")!;
             Check(left.Minimum == 0 && left.Maximum == 100 && left.DecimalPlaces == 2 && top.Maximum == 100,
                 "Settings accept fractional percentages from 0 to 100");
+            var leftSlider = (TrackBar)Field(options, "pipLeftSlider")!;
+            var topSlider = (TrackBar)Field(options, "pipTopSlider")!;
+            var scaleSlider = (TrackBar)Field(options, "pipScaleSlider")!;
+            var scaleInput = (NumericUpDown)Field(options, "pipScaleInput")!;
+            left.Value = 22;
+            Check(leftSlider.Value == 22, "Changing a position input updates its slider");
+            topSlider.Value = 18;
+            Check(top.Value == 18, "Changing a position slider updates its numeric input");
+            scaleInput.Value = 32.5M;
+            Check(scaleSlider.Value == 33 && preview?.PipScale == .325, "Size input previews fine adjustments and updates the slider");
+            scaleSlider.Value = 35;
+            Check(scaleInput.Value == 35 && preview?.PipScale == .35, "Size slider updates its input and preview");
+            var colorText = (TextBox)Field(options, "borderColorTextBox")!;
+            var colorButton = (Button)Field(options, "borderColorButton")!;
+            colorText.Text = "a1B2c3";
+            Check(colorButton.BackColor.ToArgb() == Color.FromArgb(161, 178, 195).ToArgb() &&
+                preview?.PipBorderColor.ToArgb() == colorButton.BackColor.ToArgb(), "Valid hex immediately updates the swatch and preview");
+            colorText.Text = "BADHEX";
+            Check(colorButton.BackColor.ToArgb() == Color.FromArgb(161, 178, 195).ToArgb(), "Invalid hex does not change the swatch");
+            Call(options, "CommitColorText");
+            Check(colorText.Text == "A1B2C3", "Leaving invalid hex restores the last valid value");
+            var toolbar = (ToolStrip)Field(options, "toolbar")!;
+            Check(toolbar.Items.Count == 4 && toolbar.Items.Cast<ToolStripItem>().All(item => item.Image is not null) &&
+                toolbar.Items[0].ToolTipText == "Open containing folder" && toolbar.Items[1].ToolTipText == "Reload from disk" &&
+                toolbar.Items[2].ToolTipText == "Export settings to file" && toolbar.Items[3].ToolTipText == "Import settings from file",
+                "Toolbar embeds all four supplied icons with the requested tooltips");
+            Check(options.BackColor == SystemColors.Control && options.ForeColor == SystemColors.ControlText,
+                "Dialog uses Windows system colors");
             left.Value = 12.5M;
             top.Value = 7.25M;
             Check(preview is { PipLeftPercent: 12.5, PipTopPercent: 7.25 } && File.ReadAllText(config.Path) == initialFile,
@@ -129,19 +160,94 @@ internal static class Program
             options.Location = new Point(-32000, -32000);
             options.Show();
             options.Enabled = true;
+            options.ActiveControl = null;
+            var groupPanels = Descendants(options).OfType<GroupBox>().Where(group => group.Text.StartsWith("PIP ")).ToArray();
+            Check(groupPanels.Length == 2 && Math.Abs(groupPanels[0].Width - groupPanels[1].Width) <= 1,
+                "Size/border and position groups occupy equal widths");
             using var bitmap = new Bitmap(options.Width, options.Height);
             options.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
             bitmap.Save(Path.Combine(AppContext.BaseDirectory, "settings-preview.png"));
             Call(options, "CancelAndClose");
             Check(cancelled && File.ReadAllText(config.Path) == initialFile, "Cancel leaves saved percentage settings unchanged");
         }
-        using var saveOptions = new OptionsForm(AppSettings.FromConfig(config), config, () => {},
-            _ => {}, config.ApplySettings, () => {}, () => {});
+        using var saveOptions = new OptionsForm(AppSettings.FromConfig(config), config,
+            _ => {}, config.ApplySettings, () => {});
         ((NumericUpDown)Field(saveOptions, "pipLeftInput")!).Value = 12.5M;
         ((NumericUpDown)Field(saveOptions, "pipTopInput")!).Value = 7.25M;
         Call(saveOptions, "SaveAndClose");
         Check(config.PipLeftPercent == 12.5 && config.PipTopPercent == 7.25,
             "Save persists the chosen percentages");
+    }
+
+    private static void TestSettingsFiles(string directory)
+    {
+        using var config = Config(directory, "files", "pip.left.percent=10\npip.top.percent=20\npip.border.size=6\ncustom.setting=original\n");
+        var initial = AppSettings.FromConfig(config);
+        AppSettings? preview = null;
+        using var options = new OptionsForm(initial, config, settings => preview = settings, config.ApplySettings, () => {});
+        var originalFile = File.ReadAllText(config.Path);
+        var importPath = Path.Combine(directory, "import.properties");
+        File.WriteAllText(importPath, "cctv1.url=rtsp://imported/source\npip.left.percent=33.25\npip.border.color=#123456\npip.border.size=99\ncustom.setting=unwanted\n");
+        var importFile = File.ReadAllText(importPath);
+        Call(options, "ImportFromFile", importPath);
+        Check(preview is { Cctv1Url: "rtsp://imported/source", PipLeftPercent: 33.25, PipTopPercent: 20, PipBorderSize: 6 } &&
+            preview.PipBorderColor.ToArgb() == Color.FromArgb(18, 52, 86).ToArgb(),
+            "Import changes only visible controls and keeps missing and hidden settings");
+        Check(File.ReadAllText(config.Path) == originalFile && File.ReadAllText(importPath) == importFile,
+            "Import writes neither the active file nor its source");
+
+        File.AppendAllText(config.Path, "\ncustom.setting=latest-on-disk\nlibvlc.options=--custom-latest\npip.border.size=8\n");
+        var externalEdits = File.ReadAllText(config.Path);
+        var exportPath = Path.Combine(directory, "backup.properties");
+        Call(options, "ExportToFile", exportPath);
+        var exported = PropertiesFile.Load(exportPath);
+        Check(exported.Get("cctv1.url") == "rtsp://imported/source" && exported.Get("pip.left.percent") == "33.25" &&
+            exported.Get("custom.setting") == "latest-on-disk" && exported.Get("libvlc.options") == "--custom-latest" &&
+            exported.Get("pip.border.size") == "8", "Export combines visible draft values with all other current disk settings");
+        Check(File.ReadAllText(config.Path) == externalEdits, "Backup export leaves the active configuration unchanged");
+        try { Call(options, "ExportToFile", config.Path); throw new InvalidOperationException("Active-file export should fail"); }
+        catch (TargetInvocationException ex) when (ex.InnerException is InvalidOperationException) {}
+        Check(File.ReadAllText(config.Path) == externalEdits, "Export cannot overwrite the active file");
+        var wrongExtension = Path.Combine(directory, "backup.txt");
+        try { Call(options, "ExportToFile", wrongExtension); throw new InvalidOperationException("Wrong extension should fail"); }
+        catch (TargetInvocationException ex) when (ex.InnerException is ArgumentException) {}
+        Check(!File.Exists(wrongExtension), "Export requires a .properties file extension");
+
+        Call(options, "ReloadFromDisk");
+        Check(preview is { PipLeftPercent: 10, PipTopPercent: 20 } && preview.Cctv1Url == initial.Cctv1Url,
+            "Reload replaces unsaved controls with current disk values");
+        var reloadWithoutPosition = PropertiesFile.Load(config.Path);
+        reloadWithoutPosition.Remove("pip.left.percent");
+        reloadWithoutPosition.Save(config.Path);
+        ((NumericUpDown)Field(options, "pipLeftInput")!).Value = 99;
+        Call(options, "ReloadFromDisk");
+        Check(preview?.PipLeftPercent == initial.PipLeftPercent,
+            "Reload discards unsaved values even when a disk key is missing");
+        var beforeInvalid = preview;
+        File.WriteAllText(importPath, "cctv1.url=rtsp://must-not-apply\npip.top.percent=not-a-number\n");
+        try { Call(options, "ImportFromFile", importPath); throw new InvalidOperationException("Invalid import should fail"); }
+        catch (TargetInvocationException ex) when (ex.InnerException is FormatException) {}
+        Check(preview == beforeInvalid, "Invalid import applies no partial changes");
+
+        ((NumericUpDown)Field(options, "pipScaleInput")!).Value = 12.34M;
+        ((NumericUpDown)Field(options, "pipLeftInput")!).Value = 44.5M;
+        Call(options, "SaveAndClose");
+        var saved = PropertiesFile.Load(config.Path);
+        Check(config.PipLeftPercent == 44.5 && config.PipScale == .1234 && config.PipBorderSize == 8 &&
+            saved.Get("custom.setting") == "latest-on-disk", "Save persists visible values and preserves hidden settings edited on disk");
+        File.AppendAllText(config.Path, "\ncustom.setting=after-dialog\n");
+        var afterDialog = File.ReadAllText(config.Path);
+        config.Dispose();
+        Check(File.ReadAllText(config.Path) == afterDialog, "Closing configuration does not overwrite Notepad edits");
+    }
+
+    private static IEnumerable<Control> Descendants(Control root)
+    {
+        foreach (Control child in root.Controls)
+        {
+            yield return child;
+            foreach (var descendant in Descendants(child)) yield return descendant;
+        }
     }
 
     private static AppConfig Config(string directory, string name, string text)
@@ -155,7 +261,7 @@ internal static class Program
         .GetConstructors(PrivateInstance).Single().Invoke(new object[] { path, PropertiesFile.Load(path) });
 
     private static object? Field(object target, string name) => target.GetType().GetField(name, PrivateInstance)!.GetValue(target);
-    private static void Call(object target, string name) => target.GetType().GetMethod(name, PrivateInstance)!.Invoke(target, null);
+    private static void Call(object target, string name, params object[] args) => target.GetType().GetMethod(name, PrivateInstance)!.Invoke(target, args);
     private static void Check(bool condition, string name)
     {
         if (!condition) throw new InvalidOperationException(name);
