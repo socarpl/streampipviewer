@@ -12,8 +12,11 @@
     <Exec Command="git rev-list --count HEAD"
           WorkingDirectory="$(MSBuildThisFileDirectory)" ConsoleToMSBuild="true"
           StandardOutputImportance="Low" Condition="'$(VersionRevision)' == ''">
-      <Output TaskParameter="ConsoleOutput" PropertyName="VersionRevision" />
+      <Output TaskParameter="ConsoleOutput" PropertyName="_VersionCommitCount" />
     </Exec>
+    <PropertyGroup Condition="'$(VersionRevision)' == ''">
+      <VersionRevision>$([MSBuild]::Subtract($(_VersionCommitCount), $(VersionRevisionOffset)))</VersionRevision>
+    </PropertyGroup>
     <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(VersionRevision)', '^\d{1,5}$'))"
            Text="VersionRevision must be a nonnegative integer below 65535." />
     <Error Condition="$(VersionRevision) &gt; 65534"

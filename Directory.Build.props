@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup>
-    <!-- Change these three numbers for a new major, minor, or patch version. -->
-    <VersionPrefix>1.0.1</VersionPrefix>
+    <!-- For a new version series, set the prefix and the total Git commit count of its .0 commit. -->
+    <VersionPrefix>1.0.2</VersionPrefix>
+    <VersionRevisionOffset>21</VersionRevisionOffset>
   </PropertyGroup>
 </Project>

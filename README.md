@@ -206,8 +206,11 @@ The helper can also be launched directly for diagnostics.
 
 ## Versions And Releases
 
-Set the three-part release version in `Directory.Build.props`, currently `1.0.1`.
-The build automatically appends the total number of Git commits, for example `1.0.1.14`.
+Set the three-part release version in `Directory.Build.props`, currently `1.0.2`.
+`VersionRevisionOffset` is the total Git commit count of the first commit in that
+version series, currently `21`. The build subtracts that offset from the current
+commit count to produce `1.0.2.0`, `1.0.2.1`, and so on. Set the offset to the expected
+commit count of the version-bump commit whenever starting a new series at `.0`.
 The main app and stream host share this version. A new commit increments the fourth
 number; rebuilding the same commit keeps it unchanged. Uncommitted edits retain the
 current commit's version. The product version also includes the Git commit hash.
@@ -216,11 +219,11 @@ Build from a checkout with full Git history (`git fetch --unshallow` for a shall
 When building a source archive without Git, supply the revision explicitly:
 
 ```powershell
-dotnet build -p:VersionRevision=14
+dotnet build -p:VersionRevision=0
 ```
 
 Every push to `main` runs the Windows release workflow. A successful build creates a
-matching tag such as `v1.0.1.14` and publishes `StreamPIPViewer-v1.0.1.14-windows.zip`
+matching tag such as `v1.0.2.0` and publishes `StreamPIPViewer-v1.0.2.0-windows.zip`
 to GitHub Releases. The workflow can also be run manually on `main`; rerunning a
 published version keeps its existing download.
 
