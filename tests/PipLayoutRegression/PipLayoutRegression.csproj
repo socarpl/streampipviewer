@@ -7,6 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\..\AppIcon.cs" Link="AppIcon.cs" />
+    <EmbeddedResource Include="..\..\assets\pip.ico" LogicalName="CctvPip.pip.ico" />
     <Compile Include="..\..\PipLayout.cs" Link="PipLayout.cs" />
     <Compile Include="..\..\AppSettings.cs" Link="AppSettings.cs" />
     <Compile Include="..\..\AppConfig.cs" Link="AppConfig.cs" />

@@ -37,6 +37,7 @@ internal sealed class StreamHostForm : Form
         libVlc = new LibVLC(options.LibVlcOptions);
 
         Text = $"{options.Label} - {(muted ? "Muted" : "Unmuted")}";
+        Icon = AppIcon.Value;
         BackColor = Color.Black;
         ClientSize = new Size(960, 540);
         StartPosition = options.Hosted ? FormStartPosition.Manual : FormStartPosition.CenterScreen;

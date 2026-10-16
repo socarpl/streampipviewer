@@ -41,6 +41,7 @@ internal sealed class OptionsForm : Form
         draftSettings = initialSettings;
 
         Text = "PIP Settings";
+        Icon = AppIcon.Value;
         Font = SystemFonts.MessageBoxFont;
         AutoScaleDimensions = new SizeF(96, 96);
         AutoScaleMode = AutoScaleMode.Dpi;

@@ -39,6 +39,7 @@ internal sealed class MainForm : Form
         this.config = config;
 
         Text = "Stream PIP Viewer";
+        Icon = AppIcon.Value;
         BackColor = Color.Black;
         MinimumSize = new Size(960, 620);
         StartPosition = FormStartPosition.CenterScreen;

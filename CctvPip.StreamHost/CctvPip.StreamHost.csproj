@@ -6,9 +6,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>..\assets\pip.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\AppIcon.cs" Link="AppIcon.cs" />
+    <EmbeddedResource Include="..\assets\pip.ico" LogicalName="CctvPip.pip.ico" />
     <PackageReference Include="LibVLCSharp" Version="3.8.5" />
     <PackageReference Include="LibVLCSharp.WinForms" Version="3.8.5" />
     <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21" />
