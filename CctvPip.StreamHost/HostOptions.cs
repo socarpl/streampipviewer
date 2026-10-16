@@ -21,7 +21,7 @@ internal sealed record HostOptions(
     {
         var values = Args.Parse(args);
         var stream = values.GetValueOrDefault("stream", "cctv1").Trim().ToLowerInvariant();
-        var configPath = values.GetValueOrDefault("config", Path.Combine(AppContext.BaseDirectory, "cctv-pip.properties"));
+        var configPath = values.GetValueOrDefault("config", Path.Combine(AppContext.BaseDirectory, "stream-pip.config"));
         var properties = File.Exists(configPath)
             ? PropertiesReader.Load(configPath)
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

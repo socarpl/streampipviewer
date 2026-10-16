@@ -12,7 +12,7 @@ internal static class Program
         var configPath = Path.Combine(AppContext.BaseDirectory, "reconnect-test.properties");
         try
         {
-            var app = Assembly.Load("CctvPip.App");
+            var app = Assembly.Load("StreamPipViewer");
             var propertiesType = app.GetType("CctvPip.App.PropertiesFile")!;
             var properties = propertiesType.GetMethod("Load")!.Invoke(null, new object[] { configPath });
             var configType = app.GetType("CctvPip.App.AppConfig")!;

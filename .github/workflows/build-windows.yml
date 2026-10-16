@@ -58,7 +58,7 @@ jobs:
       - name: Verify app and stream host versions
         run: |
           $output = Join-Path $PWD "bin/Release/net8.0-windows"
-          foreach ($relativePath in @("CctvPip.App.dll", "StreamHost/CctvPip.StreamHost.dll")) {
+          foreach ($relativePath in @("StreamPipViewer.dll", "StreamHost/CctvPip.StreamHost.dll")) {
               $path = Join-Path $output $relativePath
               $actual = [Diagnostics.FileVersionInfo]::GetVersionInfo($path).FileVersion
               if ($actual -ne $env:APP_VERSION) { throw "$relativePath has version $actual; expected $env:APP_VERSION" }
@@ -69,7 +69,8 @@ jobs:
           $ErrorActionPreference = "Stop"
           $output = Join-Path $PWD "bin/Release/net8.0-windows"
           if (-not (Test-Path -LiteralPath $output)) { throw "Release output folder was not created." }
-          $privateConfigs = Get-ChildItem -LiteralPath $output -Recurse -File -Filter "cctv-pip.properties"
+          $privateConfigs = Get-ChildItem -LiteralPath $output -Recurse -File |
+              Where-Object { $_.Name -in @("stream-pip.config", "cctv-pip.properties") }
           if ($privateConfigs) { throw "Private camera configuration must not be packaged." }
           $zipName = "StreamPIPViewer-v$env:APP_VERSION-windows.zip"
           Compress-Archive -Path (Join-Path $output "*") -DestinationPath $zipName -CompressionLevel Optimal -Force

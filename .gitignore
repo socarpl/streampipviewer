@@ -3,3 +3,4 @@ obj/
 .vs/
 *.user
 cctv-pip.properties
+stream-pip.config

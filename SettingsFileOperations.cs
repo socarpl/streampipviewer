@@ -57,9 +57,11 @@ internal static class SettingsFileOperations
 
     public static void Export(string activePath, string destinationPath, AppSettings settings)
     {
-        if (!string.Equals(Path.GetExtension(destinationPath), ".properties", StringComparison.OrdinalIgnoreCase))
+        var extension = Path.GetExtension(destinationPath);
+        if (!string.Equals(extension, ".config", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(extension, ".properties", StringComparison.OrdinalIgnoreCase))
         {
-            throw new ArgumentException("The backup file must use the .properties extension.");
+            throw new ArgumentException("The backup file must use a .config or .properties extension.");
         }
         if (string.Equals(Path.GetFullPath(activePath), Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
         {

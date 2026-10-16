@@ -11,8 +11,8 @@ Each stream runs in its own `CctvPip.StreamHost` process, and the main app embed
 
 The application is intended for a monitoring screen where two CCTV feeds should stay visible at the same time:
 
-- `CCTV1` starts as the main full-size feed.
-- `CCTV2` starts as the smaller PIP feed.
+- `Stream1` starts as the main full-size feed.
+- `Stream2` starts as the smaller PIP feed.
 - Both streams start muted.
 - Feeds can be swapped at runtime.
 - PIP position, size, and border color are configurable.
@@ -22,8 +22,8 @@ The application is intended for a monitoring screen where two CCTV feeds should 
 
 The application has two executable projects:
 
-- `CctvPip.App` is the shell application. It owns the main window, PIP layout, context menu, fullscreen behavior, settings dialog, config file, and MainWindow/PIP role mapping.
-- `CctvPip.StreamHost` is a single-stream player. One process is launched for `CCTV1`, and a second process is launched for `CCTV2`.
+- `StreamPipViewer.exe` is the shell application, built from `CctvPip.App.csproj`. It owns the main window, PIP layout, context menu, fullscreen behavior, settings dialog, config file, and MainWindow/PIP role mapping.
+- `CctvPip.StreamHost` is a single-stream player. One process is launched for `Stream1`, and a second process is launched for `Stream2`.
 
 The main app starts each host with `--hosted`, finds the host window by process ID, embeds that window into the matching video surface, and sends mute, unmute, restart, and shutdown commands to that process.
 
@@ -35,8 +35,8 @@ This design exists because some native playback backends can share audio behavio
 Hosted startup is equivalent to:
 
 ```powershell
-CctvPip.StreamHost.exe --hosted --stream cctv1 --label CCTV1 --config "path\to\cctv-pip.properties"
-CctvPip.StreamHost.exe --hosted --stream cctv2 --label CCTV2 --config "path\to\cctv-pip.properties"
+CctvPip.StreamHost.exe --hosted --stream cctv1 --label Stream1 --config "path\to\stream-pip.config"
+CctvPip.StreamHost.exe --hosted --stream cctv2 --label Stream2 --config "path\to\stream-pip.config"
 ```
 
 ## Default Streams
@@ -90,8 +90,8 @@ Open `Settings` from the context menu. The dialog uses the Windows system colors
 
 Available settings:
 
-- CCTV1 source URL.
-- CCTV2 source URL.
+- Stream1 source URL.
+- Stream2 source URL.
 - PIP size with synchronized slider and percentage input.
 - PIP left margin as a percentage of the main video width.
 - PIP top margin as a percentage of the main video height.
@@ -101,9 +101,9 @@ The toolbar provides, from left to right:
 
 - Open the folder containing the active properties file.
 - Reload dialog values from the current file on disk.
-- Export a backup `.properties` file using the values currently displayed. Other
+- Export a backup `.config` file using the values currently displayed. Other
   settings and comments come from the latest active file on disk.
-- Import dialog values from another `.properties` file. Missing values keep their
+- Import dialog values from another `.config` or `.properties` file. Missing values keep their
   current control values; settings without controls are ignored.
 
 The file path in the bottom status bar opens the active file in Notepad when clicked.
@@ -137,8 +137,12 @@ also cleaned up automatically on startup.
 The app creates or loads:
 
 ```text
-cctv-pip.properties
+stream-pip.config
 ```
+
+The file remains in the same key/value format. On startup, an existing
+`cctv-pip.properties` is renamed automatically if `stream-pip.config` does not exist.
+If both files exist, the app uses `stream-pip.config`.
 
 Typical settings:
 
@@ -242,8 +246,8 @@ dotnet build
 Then run a stream host as a normal standalone window by omitting `--hosted`:
 
 ```powershell
-.\bin\Debug\net8.0-windows\StreamHost\CctvPip.StreamHost.exe --stream cctv1 --config ".\bin\Debug\net8.0-windows\cctv-pip.properties"
-.\bin\Debug\net8.0-windows\StreamHost\CctvPip.StreamHost.exe --stream cctv2 --config ".\bin\Debug\net8.0-windows\cctv-pip.properties"
+.\bin\Debug\net8.0-windows\StreamHost\CctvPip.StreamHost.exe --stream cctv1 --config ".\bin\Debug\net8.0-windows\stream-pip.config"
+.\bin\Debug\net8.0-windows\StreamHost\CctvPip.StreamHost.exe --stream cctv2 --config ".\bin\Debug\net8.0-windows\stream-pip.config"
 ```
 
 You can also provide a stream URL directly:

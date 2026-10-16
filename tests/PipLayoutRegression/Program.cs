@@ -18,6 +18,7 @@ internal static class Program
         {
             TestLayout();
             TestConfiguration(directory);
+            TestConfigFileName(directory);
             TestOptions(directory);
             TestSettingsFiles(directory);
             Console.WriteLine("All percentage PIP regression checks passed.");
@@ -211,7 +212,11 @@ internal static class Program
         var wrongExtension = Path.Combine(directory, "backup.txt");
         try { Call(options, "ExportToFile", wrongExtension); throw new InvalidOperationException("Wrong extension should fail"); }
         catch (TargetInvocationException ex) when (ex.InnerException is ArgumentException) {}
-        Check(!File.Exists(wrongExtension), "Export requires a .properties file extension");
+        Check(!File.Exists(wrongExtension), "Export rejects unsupported file extensions");
+        var configBackup = Path.Combine(directory, "backup.config");
+        Call(options, "ExportToFile", configBackup);
+        Check(PropertiesFile.Load(configBackup).Get("pip.left.percent") == "33.25",
+            "Export supports the new .config backup format");
 
         Call(options, "ReloadFromDisk");
         Check(preview is { PipLeftPercent: 10, PipTopPercent: 20 } && preview.Cctv1Url == initial.Cctv1Url,
@@ -247,6 +252,36 @@ internal static class Program
         {
             yield return child;
             foreach (var descendant in Descendants(child)) yield return descendant;
+        }
+    }
+
+    private static void TestConfigFileName(string directory)
+    {
+        var configDirectory = Path.Combine(directory, "filename-migration");
+        Directory.CreateDirectory(configDirectory);
+        var oldPath = Path.Combine(configDirectory, "cctv-pip.properties");
+        var newPath = Path.Combine(configDirectory, "stream-pip.config");
+        File.WriteAllText(oldPath, "# preserved\npip.left.percent=23\ncustom.setting=keep\n");
+        try
+        {
+            AppConfig Load() => (AppConfig)typeof(AppConfig).GetMethod("LoadFromDirectory",
+                BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, new object[] { configDirectory })!;
+            using (var migrated = Load())
+            {
+                Check(migrated.Path == newPath && migrated.PipLeftPercent == 23 && !File.Exists(oldPath),
+                    "Legacy filename migrates to stream-pip.config without losing settings");
+                Check(File.ReadAllText(newPath).Contains("# preserved") && PropertiesFile.Load(newPath).Get("custom.setting") == "keep",
+                    "Filename migration preserves comments and hidden settings");
+            }
+            File.WriteAllText(oldPath, "pip.left.percent=99\n");
+            using var existing = Load();
+            Check(existing.Path == newPath && existing.PipLeftPercent == 23 && File.Exists(oldPath),
+                "Existing stream-pip.config takes precedence over the legacy file");
+        }
+        finally
+        {
+            foreach (var file in Directory.GetFiles(configDirectory)) File.Delete(file);
+            Directory.Delete(configDirectory);
         }
     }
 

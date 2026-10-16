@@ -5,7 +5,8 @@ namespace CctvPip.App;
 
 internal sealed class AppConfig : IDisposable
 {
-    public const string FileName = "cctv-pip.properties";
+    public const string FileName = "stream-pip.config";
+    private const string LegacyFileName = "cctv-pip.properties";
 
     private PropertiesFile properties;
 
@@ -130,23 +131,30 @@ internal sealed class AppConfig : IDisposable
     public static AppConfig LoadOrCreate()
     {
         var basePath = AppContext.BaseDirectory;
-        var appPath = System.IO.Path.Combine(basePath, FileName);
-
         try
         {
-            Directory.CreateDirectory(basePath);
-            return new AppConfig(appPath, PropertiesFile.Load(appPath));
+            return LoadFromDirectory(basePath);
         }
         catch (Exception)
         {
-            var localPath = System.IO.Path.Combine(
+            var localDirectory = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "CctvPip",
-                FileName);
+                "CctvPip");
 
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(localPath)!);
-            return new AppConfig(localPath, PropertiesFile.Load(localPath));
+            return LoadFromDirectory(localDirectory);
         }
+    }
+
+    private static AppConfig LoadFromDirectory(string directory)
+    {
+        Directory.CreateDirectory(directory);
+        var path = System.IO.Path.Combine(directory, FileName);
+        var legacyPath = System.IO.Path.Combine(directory, LegacyFileName);
+        if (!File.Exists(path) && File.Exists(legacyPath))
+        {
+            File.Move(legacyPath, path);
+        }
+        return new AppConfig(path, PropertiesFile.Load(path));
     }
 
     /// <summary>

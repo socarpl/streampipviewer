@@ -203,6 +203,11 @@ internal sealed class OptionsForm : Form
         configPathLabel.TextAlign = ContentAlignment.MiddleLeft;
         configPathLabel.Click += (_, _) => RunFileAction(config.OpenInNotepad);
         statusBar.Items.Add(configPathLabel);
+        statusBar.Items.Add(new ToolStripStatusLabel
+        {
+            Text = $"Version: {typeof(OptionsForm).Assembly.GetName().Version!.ToString(4)}",
+            TextAlign = ContentAlignment.MiddleRight
+        });
         Controls.Add(body);
         Controls.Add(toolbar);
         Controls.Add(statusBar);
@@ -349,8 +354,8 @@ internal sealed class OptionsForm : Form
     {
         using var dialog = new OpenFileDialog
         {
-            Title = "Import settings from file", Filter = "Properties files (*.properties)|*.properties",
-            DefaultExt = "properties", CheckFileExists = true, Multiselect = false,
+            Title = "Import settings from file", Filter = "Configuration files (*.config;*.properties)|*.config;*.properties",
+            DefaultExt = "config", CheckFileExists = true, Multiselect = false,
             InitialDirectory = Path.GetDirectoryName(config.Path)
         };
         if (dialog.ShowDialog(this) == DialogResult.OK) ImportFromFile(dialog.FileName);
@@ -360,9 +365,9 @@ internal sealed class OptionsForm : Form
     {
         using var dialog = new SaveFileDialog
         {
-            Title = "Export settings to file", Filter = "Properties files (*.properties)|*.properties",
-            DefaultExt = "properties", AddExtension = true, OverwritePrompt = true,
-            FileName = Path.GetFileNameWithoutExtension(config.Path) + "-backup.properties",
+            Title = "Export settings to file", Filter = "Configuration files (*.config)|*.config|Properties files (*.properties)|*.properties",
+            DefaultExt = "config", AddExtension = true, OverwritePrompt = true,
+            FileName = Path.GetFileNameWithoutExtension(config.Path) + "-backup.config",
             InitialDirectory = Path.GetDirectoryName(config.Path)
         };
         if (dialog.ShowDialog(this) == DialogResult.OK) ExportToFile(dialog.FileName);
