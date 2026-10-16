@@ -367,6 +367,7 @@ internal sealed class MainForm : Form
     {
         var oldSettings = AppSettings.FromConfig(config);
         config.ApplySettings(settings);
+        AppLog.Info("Viewer", "Settings saved");
         currentSettings = AppSettings.FromConfig(config);
         ApplyLayout();
 

@@ -10,6 +10,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\AppLog.cs" Link="AppLog.cs" />
+    <Compile Include="..\BudgetFileTarget.cs" Link="BudgetFileTarget.cs" />
+    <None Include="..\logging.config" Link="logging.config" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <PackageReference Include="NLog" Version="6.2.1" />
     <Compile Include="..\AppIcon.cs" Link="AppIcon.cs" />
     <EmbeddedResource Include="..\assets\pip.ico" LogicalName="CctvPip.pip.ico" />
     <PackageReference Include="LibVLCSharp" Version="3.8.5" />

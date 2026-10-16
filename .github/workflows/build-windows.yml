@@ -37,6 +37,9 @@ jobs:
       - name: Test release publishing and retention
         run: node tests/release.test.cjs
 
+      - name: Test logging and shared disk retention
+        run: dotnet run --project tests/LoggingRegression --configuration Release
+
       - name: Resolve version
         run: |
           $version = dotnet msbuild CctvPip.App.csproj -nologo -target:GetAssemblyVersion -getProperty:Version

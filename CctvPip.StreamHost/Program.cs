@@ -15,17 +15,26 @@ internal static class Program
 
         try
         {
+            AppLog.Initialize("StreamHost");
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                if (e.ExceptionObject is Exception error) AppLog.Error("StreamHost", "Unhandled exception", error);
+                NLog.LogManager.Flush();
+            };
             var options = HostOptions.Parse(args);
             Core.Initialize();
             Application.Run(new StreamHostForm(options));
         }
         catch (Exception ex)
         {
+            AppLog.Error("StreamHost", "Stream host failed", ex);
             MessageBox.Show(
                 $"Stream host could not start.{Environment.NewLine}{ex.Message}",
                 "CCTV Stream Host",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
+        finally { AppLog.Shutdown("StreamHost"); }
     }
 }

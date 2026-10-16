@@ -4,3 +4,4 @@ obj/
 *.user
 cctv-pip.properties
 stream-pip.config
+logs/

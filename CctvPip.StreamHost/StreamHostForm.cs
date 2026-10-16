@@ -170,6 +170,7 @@ internal sealed class StreamHostForm : Form
     /// </summary>
     private void StartPlayback()
     {
+        AppLog.Info("StreamHost", "Starting playback");
         ShowStatus("STARTING");
 
         mediaPlayer?.Stop();
@@ -182,6 +183,7 @@ internal sealed class StreamHostForm : Form
 
         player.Playing += (_, _) =>
         {
+            AppLog.Info("StreamHost", "Playback started");
             BeginInvoke(() =>
             {
                 statusLabel.Visible = false;
@@ -189,8 +191,16 @@ internal sealed class StreamHostForm : Form
                 UpdateUiState();
             });
         };
-        player.EncounteredError += (_, _) => BeginInvoke(() => ShowStatus("PLAYER ERROR"));
-        player.EndReached += (_, _) => BeginInvoke(() => ShowStatus("STREAM ENDED"));
+        player.EncounteredError += (_, _) =>
+        {
+            AppLog.Warn("StreamHost", "Playback error");
+            BeginInvoke(() => ShowStatus("PLAYER ERROR"));
+        };
+        player.EndReached += (_, _) =>
+        {
+            AppLog.Warn("StreamHost", "Stream ended");
+            BeginInvoke(() => ShowStatus("STREAM ENDED"));
+        };
 
         mediaPlayer = player;
         videoView.MediaPlayer = player;
@@ -206,11 +216,13 @@ internal sealed class StreamHostForm : Form
 
             if (!player.Play(media))
             {
+                AppLog.Warn("StreamHost", "Playback rejected");
                 ShowStatus("PLAY REJECTED");
             }
         }
         catch (Exception ex)
         {
+            AppLog.Error("StreamHost", "Playback failed", ex);
             ShowStatus(ex.Message);
         }
     }
@@ -220,6 +232,7 @@ internal sealed class StreamHostForm : Form
     /// </summary>
     private void Restart()
     {
+        AppLog.Info("StreamHost", "Reconnect requested");
         StartPlayback();
     }
 

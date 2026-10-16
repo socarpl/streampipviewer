@@ -39,6 +39,35 @@ CctvPip.StreamHost.exe --hosted --stream cctv1 --label Stream1 --config "path\to
 CctvPip.StreamHost.exe --hosted --stream cctv2 --label Stream2 --config "path\to\stream-pip.config"
 ```
 
+## Logging
+
+Logging uses NLog and the separate `logging.config` file beside `StreamPipViewer.exe`.
+Change its `minlevel` to `Debug`, `Info` (default), `Warn`, `Error`, or `Off`, then restart
+the application. The XML layout can also be customized. This file is independent of
+the stream settings in `stream-pip.config`.
+
+The viewer and its hosted stream processes write startup/shutdown, playback,
+reconnect, settings-save, and error events into `logs` beside the viewer executable.
+Entries include a timestamp, severity, component, and process ID. Camera URLs,
+credentials, and configuration values are not logged; exception diagnostics include
+the exception type, error code, and call stack without the potentially sensitive message.
+
+Each session starts a file such as `20270112132522_streampipviewer_log.txt`, using
+local time in `yyyyMMddHHmmss` format. Files roll at 1 MiB. Starts or rollovers in the
+same second use the next unused timestamp, preserving the filename format. Hosted
+players initially share the viewer's file; subsequent rollover files use the same format.
+
+A custom NLog target enforces a **25 MiB (26,214,400 bytes) total folder limit**,
+including existing files. It removes the oldest files on startup and before each write.
+The folder is exclusively for logs: all files in it are subject to this cleanup.
+A named mutex coordinates the viewer and stream processes. If locked files prevent
+cleanup, new writes are skipped rather than exceeding the budget. The app needs write
+permission to its executable folder. A standalone stream host uses its own executable
+folder. Do not enable NLog internal file diagnostics in this folder, since those writes
+would bypass the budget target.
+
+Run `dotnet run --project tests/LoggingRegression` for the logging regression checks.
+
 ## Default Streams
 
 Stream URLs example:

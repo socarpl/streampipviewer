@@ -14,17 +14,27 @@ internal static class Program
 
         try
         {
+            AppLog.Initialize("Viewer");
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                if (e.ExceptionObject is Exception error) AppLog.Error("Viewer", "Unhandled exception", error);
+                NLog.LogManager.Flush();
+            };
             Core.Initialize();
             using var config = AppConfig.LoadOrCreate();
+            AppLog.Info("Viewer", "Application configuration loaded");
             Application.Run(new MainForm(config));
         }
         catch (Exception ex)
         {
+            AppLog.Error("Viewer", "Application failed", ex);
             MessageBox.Show(
                 $"Stream PIP Viewer could not start.{Environment.NewLine}{ex.Message}",
                 "Stream PIP Viewer",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
         }
+        finally { AppLog.Shutdown("Viewer"); }
     }
 }

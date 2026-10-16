@@ -62,6 +62,7 @@ internal sealed class HostedStreamProcess : IDisposable
         }
 
         StopProcess();
+        AppLog.Info("Viewer", $"Starting/reconnecting stream {(int)streamId + 1}");
         StartProcess();
     }
 
@@ -127,6 +128,12 @@ internal sealed class HostedStreamProcess : IDisposable
             UseShellExecute = false
         };
 
+        if (!string.IsNullOrEmpty(AppLog.DirectoryPath))
+        {
+            startInfo.Environment[AppLog.DirectoryEnvironment] = AppLog.DirectoryPath;
+            startInfo.Environment[AppLog.SessionEnvironment] = AppLog.SessionFile;
+        }
+
         startInfo.ArgumentList.Add("--hosted");
         startInfo.ArgumentList.Add("--stream");
         startInfo.ArgumentList.Add(streamName);
@@ -145,6 +152,7 @@ internal sealed class HostedStreamProcess : IDisposable
             process = Process.Start(startInfo);
             if (process is null)
             {
+                AppLog.Warn("Viewer", "Stream host did not start");
                 view.ShowNoSignal("HOST START FAILED");
                 return;
             }
@@ -153,9 +161,11 @@ internal sealed class HostedStreamProcess : IDisposable
             EmbedHostedWindow();
             SendCommand(muted ? CommandMute : CommandUnmute);
             view.ShowLive();
+            AppLog.Info("Viewer", $"Stream {(int)streamId + 1} host ready; PID {process.Id}");
         }
         catch (Exception ex)
         {
+            AppLog.Error("Viewer", $"Stream {(int)streamId + 1} host start failed", ex);
             StopProcess();
             view.ShowNoSignal("HOST START FAILED", ex.Message);
         }
@@ -188,13 +198,15 @@ internal sealed class HostedStreamProcess : IDisposable
 
                 if (!currentProcess.WaitForExit(1500))
                 {
+                    AppLog.Warn("Viewer", $"Terminating unresponsive stream host; PID {currentProcess.Id}");
                     currentProcess.Kill(entireProcessTree: true);
                     currentProcess.WaitForExit(1500);
                 }
             }
         }
-        catch
+        catch (Exception ex)
         {
+            AppLog.Error("Viewer", "Stream host shutdown failed", ex);
         }
         finally
         {

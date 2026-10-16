@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../AppLog.cs" Link="AppLog.cs" />
+    <Compile Include="../../BudgetFileTarget.cs" Link="BudgetFileTarget.cs" />
+    <PackageReference Include="NLog" Version="6.2.1" />
+  </ItemGroup>
+</Project>
